@@ -1,0 +1,2 @@
+ALTER TABLE cards ADD COLUMN lan_url TEXT;
+ALTER TABLE cards ADD COLUMN wan_url TEXT;

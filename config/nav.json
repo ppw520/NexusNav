@@ -1,0 +1,56 @@
+{
+  "version" : "1.1.0",
+  "groups" : [ {
+    "id" : "group",
+    "name" : "开发工具",
+    "orderIndex" : 0
+  }, {
+    "id" : "group-2",
+    "name" : "媒体服务",
+    "orderIndex" : 1
+  }, {
+    "id" : "group-3",
+    "name" : "监控管理",
+    "orderIndex" : 2
+  } ],
+  "cards" : [ {
+    "id" : "github-d632c1",
+    "groupId" : "group",
+    "name" : "github",
+    "url" : "https://github.com/",
+    "lanUrl" : null,
+    "wanUrl" : null,
+    "openMode" : "iframe",
+    "icon" : "logos:github-octocat",
+    "description" : "github",
+    "orderIndex" : 0,
+    "enabled" : true,
+    "healthCheckEnabled" : true
+  }, {
+    "id" : "wife-64308f",
+    "groupId" : "group-3",
+    "name" : "wife",
+    "url" : "http://192.168.66.1/#login",
+    "lanUrl" : null,
+    "wanUrl" : null,
+    "openMode" : "iframe",
+    "icon" : "streamline-color:wifi-flat",
+    "description" : "随身wifi管理页",
+    "orderIndex" : 0,
+    "enabled" : true,
+    "healthCheckEnabled" : true
+  }, {
+    "id" : "emby",
+    "groupId" : "group-2",
+    "name" : "Emby",
+    "url" : "http://192.168.0.172:8096",
+    "lanUrl" : "http://192.168.0.172:8096",
+    "wanUrl" : "http://www.ppwplus.top:8096/",
+    "openMode" : "auto",
+    "icon" : "cbi:emby",
+    "description" : "Emby Media Server",
+    "orderIndex" : 1,
+    "enabled" : true,
+    "healthCheckEnabled" : true
+  } ]
+}

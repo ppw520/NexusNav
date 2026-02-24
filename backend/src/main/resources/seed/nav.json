@@ -1,0 +1,56 @@
+{
+  "version": "1.1.0",
+  "groups": [
+    {
+      "id": "infra",
+      "name": "Infrastructure",
+      "orderIndex": 1
+    },
+    {
+      "id": "apps",
+      "name": "Applications",
+      "orderIndex": 2
+    }
+  ],
+  "cards": [
+    {
+      "id": "emby",
+      "groupId": "apps",
+      "name": "Emby",
+      "lanUrl": "http://192.168.1.100:8096",
+      "wanUrl": "https://emby.example.com",
+      "openMode": "auto",
+      "icon": "video-camera",
+      "description": "Emby Media Server",
+      "orderIndex": 1,
+      "enabled": true,
+      "healthCheckEnabled": true
+    },
+    {
+      "id": "router",
+      "groupId": "infra",
+      "name": "Router",
+      "lanUrl": "http://192.168.1.1",
+      "wanUrl": "https://router.example.com",
+      "openMode": "newtab",
+      "icon": "global",
+      "description": "Home gateway",
+      "orderIndex": 2,
+      "enabled": true,
+      "healthCheckEnabled": true
+    },
+    {
+      "id": "grafana",
+      "groupId": "apps",
+      "name": "Grafana",
+      "lanUrl": "http://192.168.1.100:3000",
+      "wanUrl": "https://grafana.example.com",
+      "openMode": "auto",
+      "icon": "dashboard",
+      "description": "Observability dashboard",
+      "orderIndex": 3,
+      "enabled": true,
+      "healthCheckEnabled": true
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+ALTER TABLE cards ADD COLUMN health_check_enabled INTEGER NOT NULL DEFAULT 1;

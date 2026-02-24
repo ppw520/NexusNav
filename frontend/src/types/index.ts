@@ -1,0 +1,101 @@
+export type ApiResponse<T> = {
+  code: number;
+  message: string;
+  data: T;
+};
+
+export type GroupDTO = {
+  id: string;
+  name: string;
+  orderIndex: number;
+};
+
+export type CardOpenMode = "iframe" | "newtab" | "auto";
+
+export type CardDTO = {
+  id: string;
+  groupId: string;
+  name: string;
+  url: string;
+  lanUrl?: string;
+  wanUrl?: string;
+  openMode: CardOpenMode;
+  icon?: string;
+  description?: string;
+  orderIndex: number;
+  enabled: boolean;
+  healthCheckEnabled: boolean;
+};
+
+export type HealthStatusDTO = {
+  cardId: string;
+  status: "up" | "down" | "unknown";
+  latencyMs?: number;
+  checkedAt?: number;
+  message?: string;
+};
+
+export type SearchEngineDTO = {
+  id: string;
+  name: string;
+  searchUrlTemplate: string;
+};
+
+export type SystemConfigDTO = {
+  networkModePreference: "auto" | "lan" | "wan";
+  resolvedNetworkMode: "lan" | "wan";
+  defaultSearchEngineId: string;
+  searchEngines: SearchEngineDTO[];
+  securityEnabled: boolean;
+};
+
+export type AuthSessionDTO = {
+  authenticated: boolean;
+  securityEnabled: boolean;
+  sessionTimeoutMinutes: number;
+};
+
+export type GroupPayload = {
+  id?: string;
+  name: string;
+  orderIndex: number;
+};
+
+export type CardPayload = {
+  id?: string;
+  groupId: string;
+  name: string;
+  url?: string;
+  lanUrl?: string;
+  wanUrl?: string;
+  openMode: CardOpenMode;
+  icon?: string;
+  description?: string;
+  orderIndex: number;
+  enabled: boolean;
+  healthCheckEnabled: boolean;
+};
+
+export type CardOrderItemDTO = {
+  id: string;
+  orderIndex: number;
+};
+
+export type AdminConfigDTO = {
+  networkModePreference: "auto" | "lan" | "wan";
+  defaultSearchEngineId: string;
+  searchEngines: SearchEngineDTO[];
+  security: {
+    enabled: boolean;
+    sessionTimeoutMinutes: number;
+  };
+};
+
+export type AdminConfigUpdatePayload = AdminConfigDTO & {
+  newAdminPassword?: string;
+};
+
+export type NavConfigImportPayload = {
+  groups: GroupDTO[];
+  cards: CardDTO[];
+};

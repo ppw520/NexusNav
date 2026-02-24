@@ -1,8 +1,21 @@
 HELP.md
 target/
+backend/target/
+backend/.m2/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+data/
+*.db
+*.sqlite
+*.sqlite3
+config/*.local.json
+.env
 
 ### STS ###
 .apt_generated

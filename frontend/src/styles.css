@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply min-h-screen bg-background text-foreground antialiased;
+    font-family: "Inter", "PingFang SC", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+}
