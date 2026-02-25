@@ -1,0 +1,15 @@
+services:
+  nexusnav:
+    image: ppw111/nexusnav:2026.02.25
+    container_name: nexusnav
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:sqlite:/app/data/nexusnav.db
+      NEXUSNAV_CONFIG_PATH: /app/config/config.json
+      NEXUSNAV_NAV_PATH: /app/config/nav.json
+      NEXUSNAV_HEALTH_INTERVAL: "60"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    ports:
+      - "80:8080"
