@@ -6,13 +6,14 @@ NexusNav is a self-hosted console portal for NAS/Homelab services.
 
 - Frontend: React + TypeScript + Vite + Tailwind + Zustand + lucide-react + sonner + react-rnd
 - Backend: Spring Boot 3 + SQLite + Flyway
-- Deploy: Docker + docker-compose
+- Deploy: Single Docker image + docker-compose
 
 ## Repository Layout
 
 - `frontend/`: Vite app
 - `backend/`: Spring Boot REST API
-- `docker-compose.yml`: two-container deployment
+- `Dockerfile`: unified single-image build (frontend + backend)
+- `docker-compose.yml`: single-container deployment
 - `config/nav.json`: navigation cards and groups (Config-as-Code)
 - `config/config.json`: system config (admin password, search engines, security settings)
 - `data/`: SQLite database volume
@@ -45,8 +46,95 @@ Default login password from config: `admin123456`
 docker compose up -d --build
 ```
 
-- Frontend: `http://localhost`
-- Backend: `http://localhost:8080`
+- App: `http://localhost`
+- API: `http://localhost/api/v1`
+
+## Release (Docker Hub, Manual)
+
+Default release target:
+- Image: `ppw111/nexusnav`
+- Tags: `2026.02.25` and `latest`
+- Platforms: `linux/amd64,linux/arm64`
+
+Quality gates:
+
+```bash
+npm --prefix frontend ci --no-audit --no-fund
+npm --prefix frontend run build
+./backend/mvnw -f backend/pom.xml test
+```
+
+Build and push multi-arch image:
+
+```bash
+export IMAGE=ppw111/nexusnav
+export TAG=2026.02.25
+
+docker login
+docker buildx create --name nexusnav-builder --use --bootstrap || docker buildx use nexusnav-builder
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t ${IMAGE}:${TAG} \
+  -t ${IMAGE}:latest \
+  --push .
+```
+
+Release tag:
+
+```bash
+git tag -a v2026.02.25 -m "release 2026.02.25"
+git push origin codex/release/2026-02-25 --tags
+```
+
+Verify published image:
+
+```bash
+docker pull ppw111/nexusnav:2026.02.25
+docker buildx imagetools inspect ppw111/nexusnav:2026.02.25
+```
+
+## Production Rollout (Short Downtime)
+
+1. Backup host `data/` and `config/`.
+2. Use image mode in production compose:
+
+```yaml
+services:
+  nexusnav:
+    image: ppw111/nexusnav:2026.02.25
+    container_name: nexusnav
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:sqlite:/app/data/nexusnav.db
+      NEXUSNAV_CONFIG_PATH: /app/config/config.json
+      NEXUSNAV_NAV_PATH: /app/config/nav.json
+      NEXUSNAV_HEALTH_INTERVAL: "60"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    ports:
+      - "80:8080"
+```
+
+3. Roll out:
+
+```bash
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+4. Post-check:
+- `GET /`
+- `GET /settings`
+- `GET /api/v1/auth/session`
+
+## Rollback
+
+Switch image tag to the previous stable release (example `ppw111/nexusnav:2026.02.24`) and redeploy:
+
+```bash
+docker compose pull
+docker compose up -d --force-recreate
+```
 
 ## CI/CD (GitHub Actions)
 

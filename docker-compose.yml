@@ -1,9 +1,9 @@
 services:
-  nexusnav-backend:
+  nexusnav:
     build:
       context: .
-      dockerfile: backend/Dockerfile
-    container_name: nexusnav-backend
+      dockerfile: Dockerfile
+    container_name: nexusnav
     environment:
       SPRING_DATASOURCE_URL: jdbc:sqlite:/app/data/nexusnav.db
       NEXUSNAV_CONFIG_PATH: /app/config/config.json
@@ -13,16 +13,4 @@ services:
       - ./data:/app/data
       - ./config:/app/config
     ports:
-      - "8080:8080"
-
-  nexusnav-frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: nexusnav-frontend
-    depends_on:
-      - nexusnav-backend
-    environment:
-      VITE_API_BASE: /api
-    ports:
-      - "80:80"
+      - "80:8080"
