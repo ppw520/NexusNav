@@ -43,6 +43,11 @@ public class NavConfigService {
             item.setWanUrl(trimToNull(source.getWanUrl()));
             item.setUrl(firstNonBlank(trimToNull(source.getUrl()), item.getLanUrl(), item.getWanUrl()));
             item.setOpenMode(trimToNull(source.getOpenMode()));
+            item.setCardType(trimToNull(source.getCardType()));
+            item.setSshHost(trimToNull(source.getSshHost()));
+            item.setSshPort(source.getSshPort());
+            item.setSshUsername(trimToNull(source.getSshUsername()));
+            item.setSshAuthMode(trimToNull(source.getSshAuthMode()));
             item.setIcon(trimToNull(source.getIcon()));
             item.setDescription(trimToNull(source.getDescription()));
             item.setOrderIndex(source.getOrderIndex());

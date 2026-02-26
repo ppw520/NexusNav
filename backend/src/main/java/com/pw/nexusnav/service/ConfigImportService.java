@@ -254,9 +254,14 @@ public class ConfigImportService {
             entity.setName(item.getName());
             entity.setLanUrl(item.getLanUrl());
             entity.setWanUrl(item.getWanUrl());
-            String baseUrl = firstNonBlank(item.getUrl(), item.getLanUrl(), item.getWanUrl());
+            String baseUrl = resolveCardUrl(item.getCardType(), item.getUrl(), item.getLanUrl(), item.getWanUrl(), item.getSshHost(), item.getSshPort());
             entity.setUrl(baseUrl == null ? "" : baseUrl);
             entity.setOpenMode(normalizeOpenMode(item.getOpenMode()));
+            entity.setCardType(normalizeCardType(item.getCardType()));
+            entity.setSshHost(item.getSshHost());
+            entity.setSshPort(item.getSshPort());
+            entity.setSshUsername(item.getSshUsername());
+            entity.setSshAuthMode(item.getSshAuthMode());
             entity.setIcon(item.getIcon());
             entity.setDescription(item.getDescription());
             entity.setOrderIndex(item.getOrderIndex());
@@ -287,8 +292,28 @@ public class ConfigImportService {
             model.setCards(new ArrayList<>());
         }
         for (ConfigModel.CardItem card : model.getCards()) {
+            String cardType = normalizeCardType(card.getCardType());
+            card.setCardType(cardType);
             card.setOpenMode(normalizeOpenMode(card.getOpenMode()));
-            String fallbackUrl = firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl());
+            if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
+                card.setSshHost(emptyToNull(card.getSshHost()));
+                card.setSshPort(normalizeSshPort(card.getSshPort()));
+                card.setSshUsername(emptyToNull(card.getSshUsername()));
+                card.setSshAuthMode(normalizeSshAuthMode(card.getSshAuthMode()));
+            } else {
+                card.setSshHost(null);
+                card.setSshPort(null);
+                card.setSshUsername(null);
+                card.setSshAuthMode(null);
+            }
+            String fallbackUrl = resolveCardUrl(
+                    cardType,
+                    card.getUrl(),
+                    card.getLanUrl(),
+                    card.getWanUrl(),
+                    card.getSshHost(),
+                    card.getSshPort()
+            );
             card.setUrl(fallbackUrl == null ? "" : fallbackUrl);
         }
     }
@@ -362,7 +387,20 @@ public class ConfigImportService {
             if (!StringUtils.hasText(card.getName())) {
                 throw new IllegalStateException("Card name is required");
             }
-            if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
+            String cardType = normalizeCardType(card.getCardType());
+            card.setCardType(cardType);
+            if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
+                if (!StringUtils.hasText(card.getSshHost())) {
+                    throw new IllegalStateException("SSH host is required: " + card.getId());
+                }
+                if (card.getSshPort() == null || card.getSshPort() <= 0 || card.getSshPort() > 65535) {
+                    throw new IllegalStateException("SSH port is invalid: " + card.getId());
+                }
+                if (!StringUtils.hasText(card.getSshUsername())) {
+                    throw new IllegalStateException("SSH username is required: " + card.getId());
+                }
+                card.setSshAuthMode(normalizeSshAuthMode(card.getSshAuthMode()));
+            } else if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
                 throw new IllegalStateException("Card url is required: " + card.getId());
             }
             String normalizedMode = normalizeOpenMode(card.getOpenMode());
@@ -493,6 +531,60 @@ public class ConfigImportService {
             throw new IllegalStateException("Invalid openMode: " + openMode);
         }
         return normalized;
+    }
+
+    private String normalizeCardType(String cardType) {
+        if (!StringUtils.hasText(cardType)) {
+            return ConfigModel.CARD_TYPE_GENERIC;
+        }
+        String normalized = cardType.trim().toLowerCase();
+        if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized) && !ConfigModel.CARD_TYPE_SSH.equals(normalized)) {
+            throw new IllegalStateException("Invalid cardType: " + cardType);
+        }
+        return normalized;
+    }
+
+    private String normalizeSshAuthMode(String sshAuthMode) {
+        if (!StringUtils.hasText(sshAuthMode)) {
+            return ConfigModel.SSH_AUTH_PASSWORD;
+        }
+        String normalized = sshAuthMode.trim().toLowerCase();
+        if ("private_key".equals(normalized)) {
+            normalized = ConfigModel.SSH_AUTH_PRIVATE_KEY;
+        }
+        if (!ConfigModel.SSH_AUTH_PASSWORD.equals(normalized) && !ConfigModel.SSH_AUTH_PRIVATE_KEY.equals(normalized)) {
+            throw new IllegalStateException("Invalid sshAuthMode: " + sshAuthMode);
+        }
+        return normalized;
+    }
+
+    private Integer normalizeSshPort(Integer sshPort) {
+        if (sshPort == null || sshPort <= 0 || sshPort > 65535) {
+            return 22;
+        }
+        return sshPort;
+    }
+
+    private String resolveCardUrl(
+            String cardType,
+            String url,
+            String lanUrl,
+            String wanUrl,
+            String sshHost,
+            Integer sshPort
+    ) {
+        if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
+            Integer port = normalizeSshPort(sshPort);
+            if (StringUtils.hasText(sshHost)) {
+                return "ssh://" + sshHost.trim() + ":" + port;
+            }
+            return StringUtils.hasText(url) ? url.trim() : null;
+        }
+        return firstNonBlank(url, lanUrl, wanUrl);
+    }
+
+    private String emptyToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private boolean isValidNetworkMode(String mode) {

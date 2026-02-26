@@ -1,20 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { FloatingWindow } from "../components/FloatingWindow";
+import { SshTerminalWindow } from "../components/SshTerminalWindow";
 import { ServiceCard } from "../components/ServiceCard";
 import { useCardStore } from "../store/useCardStore";
 import { useHealthStore } from "../store/useHealthStore";
 import { useSystemStore } from "../store/useSystemStore";
 import type { CardDTO } from "../types";
 
-type OpenWindow = {
+type OpenIframeWindow = {
   id: string;
   cardId: string;
   title: string;
   icon?: string;
+  type: "iframe";
   url: string;
   zIndex: number;
 };
+
+type OpenSshWindow = {
+  id: string;
+  cardId: string;
+  title: string;
+  icon?: string;
+  type: "ssh";
+  sshHost?: string;
+  sshPort?: number;
+  sshUsername?: string;
+  sshAuthMode?: "password" | "privatekey";
+  zIndex: number;
+};
+
+type OpenWindow = OpenIframeWindow | OpenSshWindow;
 
 export function HomePage() {
   const groups = useCardStore((state) => state.groups);
@@ -94,6 +111,30 @@ export function HomePage() {
   };
 
   const handleServiceCardClick = (card: CardDTO) => {
+    if (card.cardType === "ssh") {
+      const existingSsh = openWindows.find((window) => window.cardId === card.id);
+      if (existingSsh) {
+        focusWindow(existingSsh.id);
+        return;
+      }
+
+      const nextSsh: OpenSshWindow = {
+        id: `window-${card.id}-${Date.now()}`,
+        cardId: card.id,
+        title: card.name,
+        icon: card.icon,
+        type: "ssh",
+        sshHost: card.sshHost,
+        sshPort: card.sshPort,
+        sshUsername: card.sshUsername,
+        sshAuthMode: card.sshAuthMode,
+        zIndex: maxZIndex + 1
+      };
+      setOpenWindows((previous) => [...previous, nextSsh]);
+      setMaxZIndex((value) => value + 1);
+      return;
+    }
+
     const health = healthByCardId[card.id];
     if (card.openMode === "newtab" || (card.openMode === "auto" && health?.status === "down")) {
       window.open(card.url, "_blank", "noopener,noreferrer");
@@ -106,11 +147,12 @@ export function HomePage() {
       return;
     }
 
-    const next: OpenWindow = {
+    const next: OpenIframeWindow = {
       id: `window-${card.id}-${Date.now()}`,
       cardId: card.id,
       title: card.name,
       icon: card.icon,
+      type: "iframe",
       url: card.url,
       zIndex: maxZIndex + 1
     };
@@ -162,18 +204,35 @@ export function HomePage() {
         )}
       </div>
 
-      {openWindows.map((window) => (
-        <FloatingWindow
-          key={window.id}
-          id={window.id}
-          title={window.title}
-          icon={window.icon}
-          url={window.url}
-          zIndex={window.zIndex}
-          onClose={() => setOpenWindows((previous) => previous.filter((item) => item.id !== window.id))}
-          onFocus={() => focusWindow(window.id)}
-        />
-      ))}
+      {openWindows.map((window) =>
+        window.type === "ssh" ? (
+          <SshTerminalWindow
+            key={window.id}
+            id={window.id}
+            title={window.title}
+            icon={window.icon}
+            cardId={window.cardId}
+            sshHost={window.sshHost}
+            sshPort={window.sshPort}
+            sshUsername={window.sshUsername}
+            sshAuthMode={window.sshAuthMode}
+            zIndex={window.zIndex}
+            onClose={() => setOpenWindows((previous) => previous.filter((item) => item.id !== window.id))}
+            onFocus={() => focusWindow(window.id)}
+          />
+        ) : (
+          <FloatingWindow
+            key={window.id}
+            id={window.id}
+            title={window.title}
+            icon={window.icon}
+            url={window.url}
+            zIndex={window.zIndex}
+            onClose={() => setOpenWindows((previous) => previous.filter((item) => item.id !== window.id))}
+            onFocus={() => focusWindow(window.id)}
+          />
+        )
+      )}
     </>
   );
 }

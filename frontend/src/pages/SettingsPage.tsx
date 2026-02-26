@@ -22,7 +22,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useCardStore } from "../store/useCardStore";
 import { useSystemStore } from "../store/useSystemStore";
 import { cn } from "../lib/utils";
-import type { AdminConfigDTO, CardOpenMode, NavConfigImportPayload } from "../types";
+import type { AdminConfigDTO, CardOpenMode, CardType, NavConfigImportPayload, SshAuthMode } from "../types";
 
 const TAB_ITEMS = [
   { value: "services", label: "服务管理" },
@@ -56,9 +56,14 @@ type CardForm = {
   id?: string;
   groupId: string;
   name: string;
+  cardType: CardType;
   url: string;
   lanUrl: string;
   wanUrl: string;
+  sshHost: string;
+  sshPort: string;
+  sshUsername: string;
+  sshAuthMode: SshAuthMode;
   icon: string;
   description: string;
   openMode: CardOpenMode;
@@ -174,9 +179,14 @@ export function SettingsPage() {
   const [cardForm, setCardForm] = useState<CardForm>({
     groupId: "",
     name: "",
+    cardType: "generic",
     url: "",
     lanUrl: "",
     wanUrl: "",
+    sshHost: "",
+    sshPort: "22",
+    sshUsername: "",
+    sshAuthMode: "password",
     icon: "",
     description: "",
     openMode: "iframe",
@@ -259,26 +269,31 @@ export function SettingsPage() {
     setVerifiedForConfig(!adminConfig.security.requireAuthForConfig || hasValidConfigVerifyToken());
   }, [adminConfig]);
 
-  const resetCardForm = () =>
+  const resetCardForm = (cardType: CardType = "generic") =>
     setCardForm({
       groupId: sortedGroups[0]?.id || "",
       name: "",
+      cardType,
       url: "",
       lanUrl: "",
       wanUrl: "",
+      sshHost: "",
+      sshPort: "22",
+      sshUsername: "",
+      sshAuthMode: "password",
       icon: "",
       description: "",
       openMode: "iframe",
       orderIndex: "0",
       enabled: true,
-      healthCheckEnabled: true
+      healthCheckEnabled: cardType !== "ssh"
     });
 
   const resetGroupForm = () => setGroupForm({ name: "", orderIndex: "0" });
   const resetSearchForm = () => setSearchForm({ name: "", searchUrlTemplate: "", icon: "" });
 
-  const openCreateServiceModal = () => {
-    resetCardForm();
+  const openCreateServiceModal = (cardType: CardType = "generic") => {
+    resetCardForm(cardType);
     setServiceModalOpen(true);
   };
 
@@ -287,9 +302,14 @@ export function SettingsPage() {
       id: card.id,
       groupId: card.groupId,
       name: card.name,
+      cardType: card.cardType || "generic",
       url: card.url || "",
       lanUrl: card.lanUrl || "",
       wanUrl: card.wanUrl || "",
+      sshHost: card.sshHost || "",
+      sshPort: String(card.sshPort || 22),
+      sshUsername: card.sshUsername || "",
+      sshAuthMode: card.sshAuthMode || "password",
       icon: card.icon || "",
       description: card.description || "",
       openMode: card.openMode,
@@ -404,23 +424,35 @@ export function SettingsPage() {
 
   const submitCard = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (cardForm.cardType === "ssh" && (!cardForm.sshHost.trim() || !cardForm.sshUsername.trim())) {
+      toast.error("SSH 卡片需要填写主机和用户名");
+      return;
+    }
     setSaving(true);
     try {
       const normalizedOrderIndex = Number.isNaN(Number(cardForm.orderIndex))
         ? 0
         : Number(cardForm.orderIndex || 0);
+      const normalizedSshPort = Number.isNaN(Number(cardForm.sshPort))
+        ? 22
+        : Math.min(65535, Math.max(1, Number(cardForm.sshPort || 22)));
       const payload = {
         groupId: cardForm.groupId,
         name: cardForm.name,
-        url: cardForm.url || undefined,
-        lanUrl: cardForm.lanUrl || undefined,
-        wanUrl: cardForm.wanUrl || undefined,
+        cardType: cardForm.cardType,
+        url: cardForm.cardType === "ssh" ? undefined : cardForm.url || undefined,
+        lanUrl: cardForm.cardType === "ssh" ? undefined : cardForm.lanUrl || undefined,
+        wanUrl: cardForm.cardType === "ssh" ? undefined : cardForm.wanUrl || undefined,
+        sshHost: cardForm.cardType === "ssh" ? cardForm.sshHost || undefined : undefined,
+        sshPort: cardForm.cardType === "ssh" ? normalizedSshPort : undefined,
+        sshUsername: cardForm.cardType === "ssh" ? cardForm.sshUsername || undefined : undefined,
+        sshAuthMode: cardForm.cardType === "ssh" ? cardForm.sshAuthMode : undefined,
         icon: cardForm.icon || undefined,
         description: cardForm.description || undefined,
-        openMode: cardForm.openMode,
+        openMode: cardForm.cardType === "ssh" ? "iframe" : cardForm.openMode,
         orderIndex: normalizedOrderIndex,
         enabled: cardForm.enabled,
-        healthCheckEnabled: cardForm.healthCheckEnabled
+        healthCheckEnabled: cardForm.cardType === "ssh" ? false : cardForm.healthCheckEnabled
       };
       if (cardForm.id) {
         await updateCard(cardForm.id, payload);
@@ -536,6 +568,11 @@ export function SettingsPage() {
           lanUrl?: unknown;
           wanUrl?: unknown;
           openMode?: unknown;
+          cardType?: unknown;
+          sshHost?: unknown;
+          sshPort?: unknown;
+          sshUsername?: unknown;
+          sshAuthMode?: unknown;
           icon?: unknown;
           description?: unknown;
           orderIndex?: unknown;
@@ -605,14 +642,23 @@ export function SettingsPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-slate-300">共 {sortedCards.length} 个服务</p>
-              <Button
-                variant="default"
-                className="h-9 rounded-lg border border-sky-400/20 bg-sky-500/85 px-4 text-slate-950 hover:bg-sky-400"
-                onClick={openCreateServiceModal}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                添加服务
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className={cn("h-9 rounded-lg px-4", OUTLINE_DARK_BUTTON_CLASS)}
+                  onClick={() => openCreateServiceModal("ssh")}
+                >
+                  SSH 模板
+                </Button>
+                <Button
+                  variant="default"
+                  className="h-9 rounded-lg border border-sky-400/20 bg-sky-500/85 px-4 text-slate-950 hover:bg-sky-400"
+                  onClick={() => openCreateServiceModal("generic")}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  添加服务
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -661,7 +707,14 @@ export function SettingsPage() {
 
                   <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
                     <span className="mr-2 truncate">{card.url}</span>
-                    {card.openMode === "newtab" && <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />}
+                    {card.cardType === "ssh" && (
+                      <span className="rounded border border-emerald-400/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                        SSH
+                      </span>
+                    )}
+                    {card.cardType !== "ssh" && card.openMode === "newtab" && (
+                      <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
+                    )}
                   </div>
                 </div>
               ))}
@@ -1092,30 +1145,98 @@ export function SettingsPage() {
             />
           </ModalField>
 
-          <ModalField label="默认地址">
-            <Input
-              className={MODAL_INPUT_CLASS}
-              value={cardForm.url}
-              onChange={(event) => setCardForm((prev) => ({ ...prev, url: event.target.value }))}
-              required
-            />
+          <ModalField label="卡片类型">
+            <select
+              className={MODAL_SELECT_CLASS}
+              value={cardForm.cardType}
+              onChange={(event) => {
+                const nextType = event.target.value as CardType;
+                setCardForm((prev) => ({
+                  ...prev,
+                  cardType: nextType,
+                  openMode: "iframe",
+                  healthCheckEnabled: nextType === "ssh" ? false : prev.healthCheckEnabled
+                }));
+              }}
+            >
+              <option value="generic">通用</option>
+              <option value="ssh">SSH 终端</option>
+            </select>
           </ModalField>
 
-          <ModalField label="内网地址（可选）">
-            <Input
-              className={MODAL_INPUT_CLASS}
-              value={cardForm.lanUrl}
-              onChange={(event) => setCardForm((prev) => ({ ...prev, lanUrl: event.target.value }))}
-            />
-          </ModalField>
+          {cardForm.cardType === "generic" && (
+            <>
+              <ModalField label="默认地址">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  value={cardForm.url}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, url: event.target.value }))}
+                  required
+                />
+              </ModalField>
 
-          <ModalField label="外网地址（可选）">
-            <Input
-              className={MODAL_INPUT_CLASS}
-              value={cardForm.wanUrl}
-              onChange={(event) => setCardForm((prev) => ({ ...prev, wanUrl: event.target.value }))}
-            />
-          </ModalField>
+              <ModalField label="内网地址（可选）">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  value={cardForm.lanUrl}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, lanUrl: event.target.value }))}
+                />
+              </ModalField>
+
+              <ModalField label="外网地址（可选）">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  value={cardForm.wanUrl}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, wanUrl: event.target.value }))}
+                />
+              </ModalField>
+            </>
+          )}
+
+          {cardForm.cardType === "ssh" && (
+            <>
+              <ModalField label="SSH 主机">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  value={cardForm.sshHost}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, sshHost: event.target.value }))}
+                  placeholder="例如 192.168.1.10 或 server.example.com"
+                  required
+                />
+              </ModalField>
+
+              <ModalField label="SSH 端口">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={cardForm.sshPort}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, sshPort: event.target.value }))}
+                />
+              </ModalField>
+
+              <ModalField label="SSH 用户名">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  value={cardForm.sshUsername}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, sshUsername: event.target.value }))}
+                  required
+                />
+              </ModalField>
+
+              <ModalField label="认证方式" hint="密码/私钥在打开终端时输入，不会保存">
+                <select
+                  className={MODAL_SELECT_CLASS}
+                  value={cardForm.sshAuthMode}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, sshAuthMode: event.target.value as SshAuthMode }))}
+                >
+                  <option value="password">密码</option>
+                  <option value="privatekey">私钥</option>
+                </select>
+              </ModalField>
+            </>
+          )}
 
           <ModalField label="图标（Emoji / Iconify）">
             <Input
@@ -1149,17 +1270,19 @@ export function SettingsPage() {
             </select>
           </ModalField>
 
-          <ModalField label="打开方式">
-            <select
-              className={MODAL_SELECT_CLASS}
-              value={cardForm.openMode}
-              onChange={(event) => setCardForm((prev) => ({ ...prev, openMode: event.target.value as CardOpenMode }))}
-            >
-              <option value="iframe">iframe 小窗</option>
-              <option value="newtab">新标签页</option>
-              <option value="auto">自动</option>
-            </select>
-          </ModalField>
+          {cardForm.cardType !== "ssh" && (
+            <ModalField label="打开方式">
+              <select
+                className={MODAL_SELECT_CLASS}
+                value={cardForm.openMode}
+                onChange={(event) => setCardForm((prev) => ({ ...prev, openMode: event.target.value as CardOpenMode }))}
+              >
+                <option value="iframe">iframe 小窗</option>
+                <option value="newtab">新标签页</option>
+                <option value="auto">自动</option>
+              </select>
+            </ModalField>
+          )}
 
           <ModalField label="排序">
             <Input
@@ -1179,14 +1302,16 @@ export function SettingsPage() {
             启用服务
           </label>
 
-          <label className="flex items-center gap-2 text-sm text-slate-300">
-            <input
-              type="checkbox"
-              checked={cardForm.healthCheckEnabled}
-              onChange={(event) => setCardForm((prev) => ({ ...prev, healthCheckEnabled: event.target.checked }))}
-            />
-            参与健康探测
-          </label>
+          {cardForm.cardType !== "ssh" && (
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={cardForm.healthCheckEnabled}
+                onChange={(event) => setCardForm((prev) => ({ ...prev, healthCheckEnabled: event.target.checked }))}
+              />
+              参与健康探测
+            </label>
+          )}
 
           <Button type="submit" variant="default" className="h-9 w-full rounded-lg" disabled={saving}>
             {cardForm.id ? "保存修改" : "添加"}

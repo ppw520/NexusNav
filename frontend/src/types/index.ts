@@ -11,6 +11,8 @@ export type GroupDTO = {
 };
 
 export type CardOpenMode = "iframe" | "newtab" | "auto";
+export type CardType = "generic" | "ssh";
+export type SshAuthMode = "password" | "privatekey";
 
 export type CardDTO = {
   id: string;
@@ -20,6 +22,11 @@ export type CardDTO = {
   lanUrl?: string;
   wanUrl?: string;
   openMode: CardOpenMode;
+  cardType: CardType;
+  sshHost?: string;
+  sshPort?: number;
+  sshUsername?: string;
+  sshAuthMode?: SshAuthMode;
   icon?: string;
   description?: string;
   orderIndex: number;
@@ -74,6 +81,11 @@ export type CardPayload = {
   lanUrl?: string;
   wanUrl?: string;
   openMode: CardOpenMode;
+  cardType: CardType;
+  sshHost?: string;
+  sshPort?: number;
+  sshUsername?: string;
+  sshAuthMode?: SshAuthMode;
   icon?: string;
   description?: string;
   orderIndex: number;

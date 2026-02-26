@@ -35,6 +35,21 @@ public class CardEntity {
     @Column(name = "open_mode", nullable = false, length = 32)
     private String openMode;
 
+    @Column(name = "card_type", nullable = false, length = 32)
+    private String cardType = "generic";
+
+    @Column(name = "ssh_host", length = 255)
+    private String sshHost;
+
+    @Column(name = "ssh_port")
+    private Integer sshPort;
+
+    @Column(name = "ssh_username", length = 128)
+    private String sshUsername;
+
+    @Column(name = "ssh_auth_mode", length = 32)
+    private String sshAuthMode;
+
     @Column(length = 128)
     private String icon;
 
@@ -104,6 +119,46 @@ public class CardEntity {
 
     public void setOpenMode(String openMode) {
         this.openMode = openMode;
+    }
+
+    public String getCardType() {
+        return cardType;
+    }
+
+    public void setCardType(String cardType) {
+        this.cardType = cardType;
+    }
+
+    public String getSshHost() {
+        return sshHost;
+    }
+
+    public void setSshHost(String sshHost) {
+        this.sshHost = sshHost;
+    }
+
+    public Integer getSshPort() {
+        return sshPort;
+    }
+
+    public void setSshPort(Integer sshPort) {
+        this.sshPort = sshPort;
+    }
+
+    public String getSshUsername() {
+        return sshUsername;
+    }
+
+    public void setSshUsername(String sshUsername) {
+        this.sshUsername = sshUsername;
+    }
+
+    public String getSshAuthMode() {
+        return sshAuthMode;
+    }
+
+    public void setSshAuthMode(String sshAuthMode) {
+        this.sshAuthMode = sshAuthMode;
     }
 
     public String getIcon() {

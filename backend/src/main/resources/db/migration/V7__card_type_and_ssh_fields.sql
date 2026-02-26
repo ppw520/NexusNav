@@ -1,0 +1,5 @@
+ALTER TABLE cards ADD COLUMN card_type TEXT NOT NULL DEFAULT 'generic';
+ALTER TABLE cards ADD COLUMN ssh_host TEXT;
+ALTER TABLE cards ADD COLUMN ssh_port INTEGER;
+ALTER TABLE cards ADD COLUMN ssh_username TEXT;
+ALTER TABLE cards ADD COLUMN ssh_auth_mode TEXT;
