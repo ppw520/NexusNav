@@ -48,6 +48,31 @@ docker compose up -d --build
 - Frontend: `http://localhost`
 - Backend: `http://localhost:8080`
 
+## CI/CD (GitHub Actions)
+
+- `CI`: `.github/workflows/ci.yml`
+  - Trigger: push/pull_request to `main`
+  - Backend: Maven build
+  - Frontend: npm build
+- `Release`: `.github/workflows/release.yml`
+  - Trigger: git tag push (`v*`, e.g. `v1.0.0`)
+  - Publish images to GHCR:
+    - `ghcr.io/ppw520/nexusnav-backend`
+    - `ghcr.io/ppw520/nexusnav-frontend`
+
+Tag and release example:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Deploy with production compose:
+
+```bash
+IMAGE_TAG=1.0.0 docker compose -f docker-compose.prod.yml up -d
+```
+
 ## Core API
 
 Public auth endpoints:

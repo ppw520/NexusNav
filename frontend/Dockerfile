@@ -6,7 +6,6 @@ COPY frontend/tsconfig.app.json ./tsconfig.app.json
 COPY frontend/tsconfig.node.json ./tsconfig.node.json
 COPY frontend/vite.config.ts ./vite.config.ts
 COPY frontend/index.html ./index.html
-COPY frontend/public ./public
 COPY frontend/src ./src
 RUN npm install --no-audit --no-fund
 RUN npm run build
