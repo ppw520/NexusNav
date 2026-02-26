@@ -1,5 +1,7 @@
 # NexusNav MVP
 
+Language: [English](README.md) | [简体中文](README.zh-CN.md)
+
 NexusNav is a self-hosted console portal for NAS/Homelab services.
 
 ## Stack
