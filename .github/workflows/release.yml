@@ -1,4 +1,4 @@
-name: Release Images
+name: Release Image
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build-and-push:
-    name: Build and Push Images
+    name: Build and Push Image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,46 +31,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (backend)
-        id: meta_backend
+      - name: Extract metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/nexusnav-backend
+          images: ghcr.io/${{ github.repository_owner }}/nexusnav
           tags: |
             type=semver,pattern={{version}},value=${{ github.ref_name }}
             type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }}
             type=sha
             type=raw,value=latest
 
-      - name: Extract metadata (frontend)
-        id: meta_frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/nexusnav-frontend
-          tags: |
-            type=semver,pattern={{version}},value=${{ github.ref_name }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }}
-            type=sha
-            type=raw,value=latest
-
-      - name: Build and push backend image
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: backend/Dockerfile
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta_backend.outputs.tags }}
-          labels: ${{ steps.meta_backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: frontend/Dockerfile
-          push: true
-          tags: ${{ steps.meta_frontend.outputs.tags }}
-          labels: ${{ steps.meta_frontend.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -1,7 +1,7 @@
 services:
-  nexusnav-backend:
-    image: ghcr.io/ppw520/nexusnav-backend:${IMAGE_TAG:-latest}
-    container_name: nexusnav-backend
+  nexusnav:
+    image: ghcr.io/ppw520/nexusnav:${IMAGE_TAG:-latest}
+    container_name: nexusnav
     restart: unless-stopped
     environment:
       SPRING_DATASOURCE_URL: jdbc:sqlite:/app/data/nexusnav.db
@@ -11,12 +11,5 @@ services:
     volumes:
       - ./data:/app/data
       - ./config:/app/config
-
-  nexusnav-frontend:
-    image: ghcr.io/ppw520/nexusnav-frontend:${IMAGE_TAG:-latest}
-    container_name: nexusnav-frontend
-    restart: unless-stopped
-    depends_on:
-      - nexusnav-backend
     ports:
-      - "80:80"
+      - "80:8080"

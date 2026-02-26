@@ -49,11 +49,11 @@ docker compose up -d --build
 - App: `http://localhost`
 - API: `http://localhost/api/v1`
 
-## Release (Docker Hub, Manual)
+## Release (Single Image)
 
 Default release target:
-- Image: `ppw111/nexusnav`
-- Tags: `2026.02.25` and `latest`
+- Image: `ghcr.io/ppw520/nexusnav`
+- Tags: semantic version (`0.1.0`) and `latest`
 - Platforms: `linux/amd64,linux/arm64`
 
 Quality gates:
@@ -67,7 +67,7 @@ npm --prefix frontend run build
 Build and push multi-arch image:
 
 ```bash
-export IMAGE=ppw111/nexusnav
+export IMAGE=ghcr.io/ppw520/nexusnav
 export TAG=2026.02.25
 
 docker login
@@ -83,14 +83,14 @@ Release tag:
 
 ```bash
 git tag -a v2026.02.25 -m "release 2026.02.25"
-git push origin codex/release/2026-02-25 --tags
+git push origin v2026.02.25
 ```
 
 Verify published image:
 
 ```bash
-docker pull ppw111/nexusnav:2026.02.25
-docker buildx imagetools inspect ppw111/nexusnav:2026.02.25
+docker pull ghcr.io/ppw520/nexusnav:2026.02.25
+docker buildx imagetools inspect ghcr.io/ppw520/nexusnav:2026.02.25
 ```
 
 ## Production Rollout (Short Downtime)
@@ -101,7 +101,7 @@ docker buildx imagetools inspect ppw111/nexusnav:2026.02.25
 ```yaml
 services:
   nexusnav:
-    image: ppw111/nexusnav:2026.02.25
+    image: ghcr.io/ppw520/nexusnav:2026.02.25
     container_name: nexusnav
     environment:
       SPRING_DATASOURCE_URL: jdbc:sqlite:/app/data/nexusnav.db
@@ -129,7 +129,7 @@ docker compose up -d --force-recreate
 
 ## Rollback
 
-Switch image tag to the previous stable release (example `ppw111/nexusnav:2026.02.24`) and redeploy:
+Switch image tag to the previous stable release (example `ghcr.io/ppw520/nexusnav:2026.02.24`) and redeploy:
 
 ```bash
 docker compose pull
@@ -142,11 +142,11 @@ docker compose up -d --force-recreate
   - Trigger: push/pull_request to `main`
   - Backend: Maven build
   - Frontend: npm build
+  - Single image: `docker build -f Dockerfile`
 - `Release`: `.github/workflows/release.yml`
   - Trigger: git tag push (`v*`, e.g. `v1.0.0`)
-  - Publish images to GHCR:
-    - `ghcr.io/ppw520/nexusnav-backend`
-    - `ghcr.io/ppw520/nexusnav-frontend`
+  - Publish image to GHCR:
+    - `ghcr.io/ppw520/nexusnav`
 
 Tag and release example:
 
