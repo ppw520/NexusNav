@@ -94,4 +94,9 @@ Rules:
 ## Notes
 
 - MVP is single-user and session-cookie based auth.
-- `react-rnd` dependency is included but not enabled in UI yet.
+- 设置页新增：
+  - `每日一句` 开关（首页顶部文案是否调用第三方接口）
+  - `背景设置`（`gradient` 或 `image`）
+  - `搜索引擎 icon`（支持 Iconify/Emoji/URL/data URL）
+  - `requireAuthForConfig`（进入配置页二次验证）
+- 背景图采用 `data:image/*;base64,` 存储，服务端限制解码后大小不超过 `512KB`。

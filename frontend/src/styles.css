@@ -13,4 +13,8 @@
     @apply min-h-screen bg-background text-foreground antialiased;
     font-family: "Inter", "PingFang SC", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   }
+
+  body {
+    background-color: #020617;
+  }
 }

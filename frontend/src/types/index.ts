@@ -39,6 +39,7 @@ export type SearchEngineDTO = {
   id: string;
   name: string;
   searchUrlTemplate: string;
+  icon?: string;
 };
 
 export type SystemConfigDTO = {
@@ -47,6 +48,10 @@ export type SystemConfigDTO = {
   defaultSearchEngineId: string;
   searchEngines: SearchEngineDTO[];
   securityEnabled: boolean;
+  requireAuthForConfig: boolean;
+  dailySentenceEnabled: boolean;
+  backgroundType: "gradient" | "image";
+  backgroundImageDataUrl?: string;
 };
 
 export type AuthSessionDTO = {
@@ -84,10 +89,14 @@ export type CardOrderItemDTO = {
 export type AdminConfigDTO = {
   networkModePreference: "auto" | "lan" | "wan";
   defaultSearchEngineId: string;
+  dailySentenceEnabled: boolean;
+  backgroundType: "gradient" | "image";
+  backgroundImageDataUrl?: string;
   searchEngines: SearchEngineDTO[];
   security: {
     enabled: boolean;
     sessionTimeoutMinutes: number;
+    requireAuthForConfig: boolean;
   };
 };
 
@@ -98,4 +107,9 @@ export type AdminConfigUpdatePayload = AdminConfigDTO & {
 export type NavConfigImportPayload = {
   groups: GroupDTO[];
   cards: CardDTO[];
+};
+
+export type VerifyConfigResponse = {
+  verifyToken: string;
+  expiresInSeconds: number;
 };

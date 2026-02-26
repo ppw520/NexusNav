@@ -7,8 +7,12 @@ public record SystemConfigDTO(
         String resolvedNetworkMode,
         String defaultSearchEngineId,
         List<SearchEngineDTO> searchEngines,
-        boolean securityEnabled
+        boolean securityEnabled,
+        boolean requireAuthForConfig,
+        boolean dailySentenceEnabled,
+        String backgroundType,
+        String backgroundImageDataUrl
 ) {
-    public record SearchEngineDTO(String id, String name, String searchUrlTemplate) {
+    public record SearchEngineDTO(String id, String name, String searchUrlTemplate, String icon) {
     }
 }

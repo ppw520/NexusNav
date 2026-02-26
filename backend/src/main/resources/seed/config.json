@@ -2,9 +2,13 @@
   "adminPassword": "$2y$10$iLA0KMmEK9ygCU/cZSkmfOYO59507PTkqhU/Pf2/1psJqLCl6e6j6",
   "defaultSearchEngineId": "bing",
   "networkModePreference": "auto",
+  "dailySentenceEnabled": true,
+  "backgroundType": "gradient",
+  "backgroundImageDataUrl": null,
   "security": {
     "enabled": true,
-    "sessionTimeoutMinutes": 480
+    "sessionTimeoutMinutes": 480,
+    "requireAuthForConfig": false
   },
   "searchEngines": [
     {
@@ -12,14 +16,16 @@
       "name": "Bing",
       "searchUrlTemplate": "https://www.bing.com/search?q=%s",
       "lanUrl": "https://www.bing.com/search?q=%s",
-      "wanUrl": "https://www.bing.com/search?q=%s"
+      "wanUrl": "https://www.bing.com/search?q=%s",
+      "icon": ""
     },
     {
       "id": "google",
       "name": "Google",
       "searchUrlTemplate": "https://www.google.com/search?q=%s",
       "lanUrl": "https://www.google.com/search?q=%s",
-      "wanUrl": "https://www.google.com/search?q=%s"
+      "wanUrl": "https://www.google.com/search?q=%s",
+      "icon": ""
     }
   ]
 }

@@ -58,6 +58,10 @@ function isEmojiLike(value: string): boolean {
   return Array.from(value).length <= 4 && !/[a-z0-9:_-]/i.test(value);
 }
 
+function isImageSource(value: string): boolean {
+  return value.startsWith("data:image/") || value.startsWith("http://") || value.startsWith("https://");
+}
+
 export function AppIcon({ icon, className, emojiClassName }: AppIconProps) {
   const value = (icon || "").trim();
 
@@ -77,6 +81,10 @@ export function AppIcon({ icon, className, emojiClassName }: AppIconProps) {
 
   if (isEmojiLike(value)) {
     return <span className={cn("inline-flex items-center justify-center text-lg leading-none", emojiClassName)}>{value}</span>;
+  }
+
+  if (isImageSource(value)) {
+    return <img src={value} alt="" className={cn("h-full w-full object-contain", className)} loading="lazy" />;
   }
 
   return <Link2 className={className} />;

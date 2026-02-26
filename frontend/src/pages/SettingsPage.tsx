@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Download,
   ExternalLink,
+  ImagePlus,
   Pencil,
   Plus,
-  Search,
   Shield,
   Trash2,
   Upload,
@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Input } from "../components/ui/input";
 import { Tabs } from "../components/ui/tabs";
 import { Textarea } from "../components/ui/textarea";
-import { importNavConfig } from "../services/api";
+import { importNavConfig, verifyConfig } from "../services/api";
 import { useAuthStore } from "../store/useAuthStore";
 import { useCardStore } from "../store/useCardStore";
 import { useSystemStore } from "../store/useSystemStore";
@@ -29,13 +29,28 @@ const TAB_ITEMS = [
   { value: "groups", label: "分组管理" },
   { value: "search", label: "搜索引擎" },
   { value: "security", label: "安全设置" },
-  { value: "network", label: "网络模式" }
+  { value: "network", label: "网络模式" },
+  { value: "daily-sentence", label: "每日一句" },
+  { value: "background", label: "背景设置" }
 ];
 
+const VERIFY_TOKEN_STORAGE_KEY = "nexusnav.config.verify-token";
+const VERIFY_TOKEN_EXPIRES_STORAGE_KEY = "nexusnav.config.verify-token.expires-at";
+const MAX_BACKGROUND_BYTES = 512 * 1024;
+const MAX_SEARCH_ICON_LENGTH = 2048;
+
 const MODAL_INPUT_CLASS =
-  "h-9 border-transparent bg-[#f3f3f5] text-sm shadow-[0_0_0_0.5px_rgba(161,161,161,0.15)] focus:ring-1 focus:ring-slate-300";
+  "h-9 border-white/15 bg-slate-900/80 text-sm text-slate-100 shadow-[0_0_0_0.5px_rgba(148,163,184,0.3)] placeholder:text-slate-400 focus:ring-1 focus:ring-sky-400/60";
 const MODAL_SELECT_CLASS =
-  "h-9 w-full rounded-md border border-transparent bg-[#f3f3f5] px-3 text-sm outline-none shadow-[0_0_0_0.5px_rgba(161,161,161,0.15)] focus:ring-1 focus:ring-slate-300";
+  "h-9 w-full rounded-md border border-white/15 bg-slate-900/80 px-3 text-sm text-slate-100 outline-none shadow-[0_0_0_0.5px_rgba(148,163,184,0.3)] focus:ring-1 focus:ring-sky-400/60";
+const OUTLINE_DARK_BUTTON_CLASS =
+  "border-white/20 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white";
+const SECTION_CARD_CLASS =
+  "border-white/10 bg-slate-950/55 text-slate-100 shadow-[0_12px_32px_rgba(2,6,23,0.45)] backdrop-blur-sm";
+const SECTION_INPUT_CLASS =
+  "border-white/20 bg-slate-950/70 text-slate-100 placeholder:text-slate-400 focus:ring-sky-400/60";
+const SECTION_SELECT_CLASS =
+  "h-10 w-full rounded-md border border-white/20 bg-slate-950/70 px-3 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-sky-400/60";
 
 type CardForm = {
   id?: string;
@@ -62,18 +77,59 @@ type SearchForm = {
   id?: string;
   name: string;
   searchUrlTemplate: string;
+  icon: string;
 };
 
 function cloneAdminConfig(config: AdminConfigDTO): AdminConfigDTO {
   return JSON.parse(JSON.stringify(config));
 }
 
+function hasValidConfigVerifyToken() {
+  const token = window.localStorage.getItem(VERIFY_TOKEN_STORAGE_KEY);
+  const expiresAt = Number(window.localStorage.getItem(VERIFY_TOKEN_EXPIRES_STORAGE_KEY) || "0");
+  return Boolean(token) && Number.isFinite(expiresAt) && Date.now() < expiresAt;
+}
+
+function toDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("read file failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compressIconToDataUrl(file: File): Promise<string> {
+  const baseDataUrl = await toDataUrl(file);
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const instance = new Image();
+    instance.onload = () => resolve(instance);
+    instance.onerror = () => reject(new Error("load image failed"));
+    instance.src = baseDataUrl;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = 32;
+  canvas.height = 32;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return baseDataUrl;
+  }
+  const ratio = Math.min(32 / image.width, 32 / image.height);
+  const width = image.width * ratio;
+  const height = image.height * ratio;
+  const x = (32 - width) / 2;
+  const y = (32 - height) / 2;
+  ctx.clearRect(0, 0, 32, 32);
+  ctx.drawImage(image, x, y, width, height);
+  return canvas.toDataURL("image/webp", 0.8);
+}
+
 function ModalField({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[13px] font-medium text-slate-900">{label}</span>
+      <span className="text-[13px] font-medium text-slate-200">{label}</span>
       {children}
-      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="text-xs text-slate-400">{hint}</p>}
     </label>
   );
 }
@@ -95,17 +151,17 @@ function FormModal({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
-      <div className="relative w-full max-w-[512px] rounded-[10px] border border-black/10 bg-white shadow-xl">
+      <div className="relative w-full max-w-[512px] rounded-[10px] border border-white/15 bg-slate-950/95 shadow-xl backdrop-blur">
         <button
           type="button"
-          className="absolute right-3 top-3 rounded p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+          className="absolute right-3 top-3 rounded p-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
           onClick={onClose}
           aria-label="关闭"
         >
           <X className="h-4 w-4" />
         </button>
         <div className="px-6 pb-6 pt-5">
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
           <div className="mt-4">{children}</div>
         </div>
       </div>
@@ -129,10 +185,17 @@ export function SettingsPage() {
     healthCheckEnabled: true
   });
   const [groupForm, setGroupForm] = useState<GroupForm>({ name: "", orderIndex: "0" });
-  const [searchForm, setSearchForm] = useState<SearchForm>({ name: "", searchUrlTemplate: "" });
+  const [searchForm, setSearchForm] = useState<SearchForm>({ name: "", searchUrlTemplate: "", icon: "" });
   const [securityEnabledDraft, setSecurityEnabledDraft] = useState(false);
+  const [requireAuthForConfigDraft, setRequireAuthForConfigDraft] = useState(false);
   const [sessionTimeoutDraft, setSessionTimeoutDraft] = useState("480");
+  const [dailySentenceEnabledDraft, setDailySentenceEnabledDraft] = useState(true);
+  const [backgroundTypeDraft, setBackgroundTypeDraft] = useState<"gradient" | "image">("gradient");
+  const [backgroundImageDraft, setBackgroundImageDraft] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [verifyPassword, setVerifyPassword] = useState("");
+  const [verifiedForConfig, setVerifiedForConfig] = useState(() => hasValidConfigVerifyToken());
+  const [verifying, setVerifying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
@@ -188,7 +251,12 @@ export function SettingsPage() {
       return;
     }
     setSecurityEnabledDraft(adminConfig.security.enabled);
+    setRequireAuthForConfigDraft(adminConfig.security.requireAuthForConfig);
     setSessionTimeoutDraft(String(adminConfig.security.sessionTimeoutMinutes || 480));
+    setDailySentenceEnabledDraft(adminConfig.dailySentenceEnabled);
+    setBackgroundTypeDraft(adminConfig.backgroundType || "gradient");
+    setBackgroundImageDraft(adminConfig.backgroundImageDataUrl || "");
+    setVerifiedForConfig(!adminConfig.security.requireAuthForConfig || hasValidConfigVerifyToken());
   }, [adminConfig]);
 
   const resetCardForm = () =>
@@ -207,7 +275,7 @@ export function SettingsPage() {
     });
 
   const resetGroupForm = () => setGroupForm({ name: "", orderIndex: "0" });
-  const resetSearchForm = () => setSearchForm({ name: "", searchUrlTemplate: "" });
+  const resetSearchForm = () => setSearchForm({ name: "", searchUrlTemplate: "", icon: "" });
 
   const openCreateServiceModal = () => {
     resetCardForm();
@@ -251,7 +319,8 @@ export function SettingsPage() {
     setSearchForm({
       id: engine.id,
       name: engine.name,
-      searchUrlTemplate: engine.searchUrlTemplate
+      searchUrlTemplate: engine.searchUrlTemplate,
+      icon: engine.icon || ""
     });
     setSearchModalOpen(true);
   };
@@ -279,6 +348,57 @@ export function SettingsPage() {
       return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const verifySettingsAccess = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!verifyPassword.trim()) {
+      toast.error("请输入管理员密码");
+      return;
+    }
+    setVerifying(true);
+    try {
+      const result = await verifyConfig(verifyPassword.trim());
+      window.localStorage.setItem(VERIFY_TOKEN_STORAGE_KEY, result.verifyToken);
+      window.localStorage.setItem(
+        VERIFY_TOKEN_EXPIRES_STORAGE_KEY,
+        String(Date.now() + result.expiresInSeconds * 1000)
+      );
+      setVerifiedForConfig(true);
+      setVerifyPassword("");
+      toast.success("二次验证通过");
+    } catch {
+      toast.error("验证失败，请检查密码");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const uploadSearchIcon = async (file: File) => {
+    try {
+      const dataUrl = await compressIconToDataUrl(file);
+      if (dataUrl.length > MAX_SEARCH_ICON_LENGTH) {
+        toast.error("图标过大，请使用更小的图片");
+        return;
+      }
+      setSearchForm((previous) => ({ ...previous, icon: dataUrl }));
+    } catch {
+      toast.error("图标读取失败");
+    }
+  };
+
+  const uploadBackgroundImage = async (file: File) => {
+    if (file.size > MAX_BACKGROUND_BYTES) {
+      toast.error("背景图不能超过 512KB");
+      return;
+    }
+    try {
+      const dataUrl = await toDataUrl(file);
+      setBackgroundImageDraft(dataUrl);
+      setBackgroundTypeDraft("image");
+    } catch {
+      toast.error("背景图读取失败");
     }
   };
 
@@ -356,7 +476,8 @@ export function SettingsPage() {
             draft.searchEngines[index] = {
               id: searchForm.id,
               name: searchForm.name,
-              searchUrlTemplate: searchForm.searchUrlTemplate
+              searchUrlTemplate: searchForm.searchUrlTemplate,
+              icon: searchForm.icon || undefined
             };
           }
         } else {
@@ -364,7 +485,8 @@ export function SettingsPage() {
           draft.searchEngines.push({
             id,
             name: searchForm.name,
-            searchUrlTemplate: searchForm.searchUrlTemplate
+            searchUrlTemplate: searchForm.searchUrlTemplate,
+            icon: searchForm.icon || undefined
           });
           if (!draft.defaultSearchEngineId) {
             draft.defaultSearchEngineId = id;
@@ -424,7 +546,20 @@ export function SettingsPage() {
 
       const hasNavPayload = Array.isArray(payload.groups) && Array.isArray(payload.cards);
       if (!hasNavPayload) {
-        await saveAdminConfig(parsed as AdminConfigDTO);
+        if (!adminConfig) {
+          throw new Error("admin config not ready");
+        }
+        const imported = parsed as Partial<AdminConfigDTO>;
+        const merged: AdminConfigDTO = {
+          ...cloneAdminConfig(adminConfig),
+          ...imported,
+          security: {
+            ...adminConfig.security,
+            ...(imported.security || {})
+          },
+          searchEngines: imported.searchEngines || adminConfig.searchEngines
+        };
+        await saveAdminConfig(merged);
         toast.success("配置导入成功");
         return;
       }
@@ -440,20 +575,23 @@ export function SettingsPage() {
     }
   };
 
+  const requiresSecondVerify = Boolean(adminConfig?.security.requireAuthForConfig);
+  const gated = requiresSecondVerify && !verifiedForConfig;
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="min-h-screen text-slate-100">
+      <div className={cn("mx-auto max-w-7xl px-4 py-8", gated && "pointer-events-none blur-[2px]")}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">配置管理</h1>
-            <p className="text-sm text-slate-600">管理你的服务卡片、分组和系统设置</p>
+            <h1 className="text-3xl font-bold tracking-tight text-white">配置管理</h1>
+            <p className="text-sm text-slate-300">管理你的服务卡片、分组和系统设置</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="h-9 rounded-lg" onClick={exportConfig}>
+            <Button variant="outline" className={cn("h-9 rounded-lg", OUTLINE_DARK_BUTTON_CLASS)} onClick={exportConfig}>
               <Download className="mr-2 h-4 w-4" />
               导出配置
             </Button>
-            <label className="inline-flex h-9 cursor-pointer items-center rounded-lg border border-border px-4 text-sm text-slate-700 hover:bg-slate-50">
+            <label className={cn("inline-flex h-9 cursor-pointer items-center rounded-lg border px-4 text-sm", OUTLINE_DARK_BUTTON_CLASS)}>
               <Upload className="mr-2 h-4 w-4" />
               导入配置
               <input className="hidden" type="file" accept=".json" onChange={importConfig} />
@@ -466,10 +604,10 @@ export function SettingsPage() {
         {activeTab === "services" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-slate-600">共 {sortedCards.length} 个服务</p>
+              <p className="text-sm text-slate-300">共 {sortedCards.length} 个服务</p>
               <Button
                 variant="default"
-                className="h-9 rounded-lg px-4"
+                className="h-9 rounded-lg border border-sky-400/20 bg-sky-500/85 px-4 text-slate-950 hover:bg-sky-400"
                 onClick={openCreateServiceModal}
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -481,25 +619,25 @@ export function SettingsPage() {
               {sortedCards.map((card) => (
                 <div
                   key={card.id}
-                  className="overflow-hidden rounded-[14px] border border-black/10 bg-white p-5 shadow-sm"
+                  className="overflow-hidden rounded-[14px] border border-white/10 bg-slate-950/55 p-5 shadow-[0_12px_24px_rgba(2,6,23,0.35)] backdrop-blur-sm"
                   style={{ borderTopWidth: 3, borderTopColor: card.enabled ? "#2563eb" : "#9ca3af" }}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[10px] bg-slate-100">
-                          <AppIcon icon={card.icon} className="h-5 w-5 text-slate-700" emojiClassName="text-xl" />
+                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[10px] border border-white/10 bg-white/5">
+                          <AppIcon icon={card.icon} className="h-5 w-5 text-slate-200" emojiClassName="text-xl" />
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-base font-medium text-slate-900">{card.name}</p>
-                          <p className="truncate text-sm text-slate-500">{card.description || "暂无描述"}</p>
+                          <p className="truncate text-base font-medium text-slate-100">{card.name}</p>
+                          <p className="truncate text-sm text-slate-400">{card.description || "暂无描述"}</p>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white text-slate-600 transition hover:bg-slate-100"
+                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-slate-300 transition hover:bg-white/10"
                         onClick={() => openEditServiceModal(card)}
                         aria-label="编辑服务"
                       >
@@ -507,7 +645,7 @@ export function SettingsPage() {
                       </button>
                       <button
                         type="button"
-                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white text-red-500 transition hover:bg-red-50"
+                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-red-400/40 bg-red-500/10 text-red-300 transition hover:bg-red-500/20"
                         onClick={() => {
                           if (!confirm("确认删除该服务？")) return;
                           deleteCard(card.id)
@@ -521,7 +659,7 @@ export function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-5 flex items-center justify-between text-xs text-slate-500">
+                  <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
                     <span className="mr-2 truncate">{card.url}</span>
                     {card.openMode === "newtab" && <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />}
                   </div>
@@ -530,7 +668,7 @@ export function SettingsPage() {
             </div>
 
             {sortedCards.length === 0 && (
-              <div className="rounded-[14px] border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+              <div className="rounded-[14px] border border-dashed border-white/20 bg-slate-950/45 p-8 text-center text-sm text-slate-400">
                 暂无服务，点击右上角「添加服务」开始创建。
               </div>
             )}
@@ -540,10 +678,10 @@ export function SettingsPage() {
         {activeTab === "groups" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-slate-600">共 {sortedGroups.length} 个分组</p>
+              <p className="text-sm text-slate-300">共 {sortedGroups.length} 个分组</p>
               <Button
                 variant="default"
-                className="h-9 rounded-lg px-4"
+                className="h-9 rounded-lg border border-sky-400/20 bg-sky-500/85 px-4 text-slate-950 hover:bg-sky-400"
                 onClick={openCreateGroupModal}
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -553,20 +691,20 @@ export function SettingsPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {sortedGroups.map((group) => (
-                <div key={group.id} className="rounded-[14px] border border-black/10 bg-white p-6 shadow-sm">
+                <div key={group.id} className="rounded-[14px] border border-white/10 bg-slate-950/55 p-6 shadow-[0_12px_24px_rgba(2,6,23,0.35)] backdrop-blur-sm">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="truncate text-base font-medium text-slate-900">{group.name}</p>
-                      <p className="text-sm text-slate-500">排序: {group.orderIndex}</p>
+                      <p className="truncate text-base font-medium text-slate-100">{group.name}</p>
+                      <p className="text-sm text-slate-400">排序: {group.orderIndex}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => openEditGroupModal(group)}>
+                      <Button variant="outline" size="sm" className={cn("h-8 rounded-lg", OUTLINE_DARK_BUTTON_CLASS)} onClick={() => openEditGroupModal(group)}>
                         编辑
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-600"
+                        className="h-8 rounded-lg border-red-400/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:text-red-200"
                         onClick={() => {
                           if (!confirm("确认删除分组？分组下服务会被一起删除。")) return;
                           deleteGroup(group.id)
@@ -578,13 +716,13 @@ export function SettingsPage() {
                       </Button>
                     </div>
                   </div>
-                  <p className="mt-4 text-sm text-slate-600">{groupCardCount[group.id] || 0} 个服务</p>
+                  <p className="mt-4 text-sm text-slate-300">{groupCardCount[group.id] || 0} 个服务</p>
                 </div>
               ))}
             </div>
 
             {sortedGroups.length === 0 && (
-              <div className="rounded-[14px] border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+              <div className="rounded-[14px] border border-dashed border-white/20 bg-slate-950/45 p-8 text-center text-sm text-slate-400">
                 暂无分组，点击右上角「添加分组」开始创建。
               </div>
             )}
@@ -594,10 +732,10 @@ export function SettingsPage() {
         {activeTab === "search" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-slate-600">共 {searchEngines.length} 个搜索引擎</p>
+              <p className="text-sm text-slate-300">共 {searchEngines.length} 个搜索引擎</p>
               <Button
                 variant="default"
-                className="h-9 rounded-lg px-4"
+                className="h-9 rounded-lg border border-sky-400/20 bg-sky-500/85 px-4 text-slate-950 hover:bg-sky-400"
                 onClick={openCreateSearchModal}
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -607,23 +745,25 @@ export function SettingsPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {searchEngines.map((engine) => (
-                <div key={engine.id} className="rounded-[14px] border border-black/10 bg-white p-6 shadow-sm">
+                <div key={engine.id} className="rounded-[14px] border border-white/10 bg-slate-950/55 p-6 shadow-[0_12px_24px_rgba(2,6,23,0.35)] backdrop-blur-sm">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <Search className="h-4 w-4 text-slate-500" />
-                        <p className="truncate text-base font-medium text-slate-900">{engine.name}</p>
+                        <span className="flex h-5 w-5 items-center justify-center overflow-hidden rounded border border-white/10 bg-white/5">
+                          <AppIcon icon={engine.icon} className="h-4 w-4 text-slate-200" />
+                        </span>
+                        <p className="truncate text-base font-medium text-slate-100">{engine.name}</p>
                       </div>
-                      <p className="mt-1 truncate text-xs text-slate-500">{engine.searchUrlTemplate}</p>
+                      <p className="mt-1 truncate text-xs text-slate-400">{engine.searchUrlTemplate}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => openEditSearchModal(engine)}>
+                      <Button variant="outline" size="sm" className={cn("h-8 rounded-lg", OUTLINE_DARK_BUTTON_CLASS)} onClick={() => openEditSearchModal(engine)}>
                         编辑
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-600"
+                        className="h-8 rounded-lg border-red-400/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:text-red-200"
                         onClick={() =>
                           saveAdmin(
                             (draft) => {
@@ -645,7 +785,7 @@ export function SettingsPage() {
             </div>
 
             {searchEngines.length === 0 && (
-              <div className="rounded-[14px] border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+              <div className="rounded-[14px] border border-dashed border-white/20 bg-slate-950/45 p-8 text-center text-sm text-slate-400">
                 暂无搜索引擎，点击右上角「添加搜索引擎」开始创建。
               </div>
             )}
@@ -653,16 +793,16 @@ export function SettingsPage() {
         )}
 
         {activeTab === "security" && (
-          <Card>
+          <Card className={SECTION_CARD_CLASS}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-slate-100">
                 <Shield className="h-5 w-5" />
                 安全与访问控制
               </CardTitle>
-              <CardDescription>安全开关、会话超时与管理员密码更新</CardDescription>
+              <CardDescription className="text-slate-300">安全开关、会话超时、配置页二次验证与管理员密码更新</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm text-slate-200">
                 <input
                   type="checkbox"
                   checked={securityEnabledDraft}
@@ -670,9 +810,18 @@ export function SettingsPage() {
                 />
                 启用登录保护
               </label>
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={requireAuthForConfigDraft}
+                  onChange={(event) => setRequireAuthForConfigDraft(event.target.checked)}
+                />
+                进入配置页需要二次验证
+              </label>
               <div className="space-y-1">
-                <label className="text-sm">会话超时（分钟）</label>
+                <label className="text-sm text-slate-200">会话超时（分钟）</label>
                 <Input
+                  className={SECTION_INPUT_CLASS}
                   type="number"
                   min={1}
                   value={sessionTimeoutDraft}
@@ -682,8 +831,9 @@ export function SettingsPage() {
                 {sessionTimeoutInvalid && <p className="text-xs text-red-500">请输入大于 0 的整数</p>}
               </div>
               <div className="space-y-1">
-                <label className="text-sm">修改管理员密码（留空不修改）</label>
+                <label className="text-sm text-slate-200">修改管理员密码（留空不修改）</label>
                 <Input
+                  className={SECTION_INPUT_CLASS}
                   type="password"
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
@@ -693,6 +843,7 @@ export function SettingsPage() {
                 {passwordTooShort && <p className="text-xs text-red-500">密码长度至少 8 位</p>}
               </div>
               <Button
+                className="border border-sky-400/20 bg-sky-500/85 text-slate-950 hover:bg-sky-400"
                 disabled={saving || passwordTooShort || sessionTimeoutInvalid || !adminConfig}
                 onClick={() => {
                   if (!adminConfig) {
@@ -703,6 +854,7 @@ export function SettingsPage() {
                     (draft) => {
                       draft.security.enabled = securityEnabledDraft;
                       draft.security.sessionTimeoutMinutes = parsedSessionTimeout;
+                      draft.security.requireAuthForConfig = requireAuthForConfigDraft;
                     },
                     {
                       successMessage: trimmedNewPassword ? "密码已更新" : "安全设置已保存",
@@ -726,16 +878,16 @@ export function SettingsPage() {
         )}
 
         {activeTab === "network" && (
-          <Card>
+          <Card className={SECTION_CARD_CLASS}>
             <CardHeader>
-              <CardTitle>网络模式偏好</CardTitle>
-              <CardDescription>自动识别内网与外网环境，为服务选择合适的访问地址</CardDescription>
+              <CardTitle className="text-slate-100">网络模式偏好</CardTitle>
+              <CardDescription className="text-slate-300">自动识别内网与外网环境，为服务选择合适的访问地址</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1">
-                <label className="text-sm">当前网络模式</label>
+                <label className="text-sm text-slate-200">当前网络模式</label>
                 <select
-                  className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                  className={SECTION_SELECT_CLASS}
                   value={adminConfig?.networkModePreference || "auto"}
                   onChange={(event) =>
                     saveAdmin(
@@ -751,8 +903,8 @@ export function SettingsPage() {
                   <option value="wan">wan（强制外网）</option>
                 </select>
               </div>
-              <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
-                <p className="mb-2 font-medium text-slate-800">网络模式说明：</p>
+              <div className="rounded-md border border-sky-400/30 bg-sky-500/10 p-4 text-sm text-slate-200">
+                <p className="mb-2 font-medium text-slate-100">网络模式说明：</p>
                 <ul className="list-disc space-y-1 pl-5">
                   <li>
                     <span className="font-medium">自动识别：</span>
@@ -771,7 +923,159 @@ export function SettingsPage() {
             </CardContent>
           </Card>
         )}
+
+        {activeTab === "daily-sentence" && (
+          <Card className={SECTION_CARD_CLASS}>
+            <CardHeader>
+              <CardTitle className="text-slate-100">每日一句</CardTitle>
+              <CardDescription className="text-slate-300">控制首页顶部是否显示第三方每日一句文案</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={dailySentenceEnabledDraft}
+                  onChange={(event) => setDailySentenceEnabledDraft(event.target.checked)}
+                />
+                启用每日一句
+              </label>
+              <Button
+                className="border border-sky-400/20 bg-sky-500/85 text-slate-950 hover:bg-sky-400"
+                disabled={saving || !adminConfig}
+                onClick={() =>
+                  saveAdmin(
+                    (draft) => {
+                      draft.dailySentenceEnabled = dailySentenceEnabledDraft;
+                    },
+                    { successMessage: "每日一句设置已保存" }
+                  )
+                }
+              >
+                保存设置
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {activeTab === "background" && (
+          <Card className={SECTION_CARD_CLASS}>
+            <CardHeader>
+              <CardTitle className="text-slate-100">背景设置</CardTitle>
+              <CardDescription className="text-slate-300">支持渐变背景或上传背景图（data URL，最大 512KB）</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-200">背景类型</label>
+                <div className="flex items-center gap-4 text-sm text-slate-200">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="backgroundType"
+                      checked={backgroundTypeDraft === "gradient"}
+                      onChange={() => setBackgroundTypeDraft("gradient")}
+                    />
+                    渐变
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="backgroundType"
+                      checked={backgroundTypeDraft === "image"}
+                      onChange={() => setBackgroundTypeDraft("image")}
+                    />
+                    图片
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-200">背景预览</label>
+                <div
+                  className="h-28 w-full rounded-xl border border-white/15"
+                  style={{
+                    background:
+                      backgroundTypeDraft === "image" && backgroundImageDraft
+                        ? `center/cover no-repeat url(${backgroundImageDraft})`
+                        : "radial-gradient(circle at 0% 0%, rgba(56,189,248,0.25), transparent 35%), radial-gradient(circle at 100% 0%, rgba(168,85,247,0.24), transparent 32%), linear-gradient(160deg, #0f172a 0%, #111827 55%, #020617 100%)"
+                  }}
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <label className={cn("inline-flex h-9 cursor-pointer items-center rounded-lg border px-4 text-sm", OUTLINE_DARK_BUTTON_CLASS)}>
+                  <ImagePlus className="mr-2 h-4 w-4" />
+                  上传背景图
+                  <input
+                    className="hidden"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        uploadBackgroundImage(file).catch(() => undefined);
+                      }
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+                <Button
+                  variant="outline"
+                  className={OUTLINE_DARK_BUTTON_CLASS}
+                  onClick={() => {
+                    setBackgroundTypeDraft("gradient");
+                    setBackgroundImageDraft("");
+                  }}
+                >
+                  重置为渐变
+                </Button>
+              </div>
+
+              <Button
+                className="border border-sky-400/20 bg-sky-500/85 text-slate-950 hover:bg-sky-400"
+                disabled={saving || !adminConfig}
+                onClick={() =>
+                  saveAdmin(
+                    (draft) => {
+                      draft.backgroundType = backgroundTypeDraft;
+                      draft.backgroundImageDataUrl =
+                        backgroundTypeDraft === "image" ? backgroundImageDraft || undefined : undefined;
+                    },
+                    { successMessage: "背景设置已保存" }
+                  )
+                }
+              >
+                保存设置
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      {gated && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
+          <Card className={cn("w-full max-w-md", SECTION_CARD_CLASS)}>
+            <CardHeader>
+              <CardTitle className="text-slate-100">配置页二次验证</CardTitle>
+              <CardDescription className="text-slate-300">已开启安全门禁，请再次输入管理员密码后继续。</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={verifySettingsAccess}>
+                <Input
+                  className={SECTION_INPUT_CLASS}
+                  type="password"
+                  value={verifyPassword}
+                  onChange={(event) => setVerifyPassword(event.target.value)}
+                  placeholder="请输入管理员密码"
+                  autoFocus
+                />
+                <Button className="w-full border border-sky-400/20 bg-sky-500/85 text-slate-950 hover:bg-sky-400" disabled={verifying || !verifyPassword.trim()}>
+                  {verifying ? "验证中..." : "验证并继续"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <FormModal
         open={serviceModalOpen}
@@ -824,7 +1128,7 @@ export function SettingsPage() {
 
           <ModalField label="描述">
             <Textarea
-              className={cn("min-h-16 border-transparent bg-[#f3f3f5] shadow-[0_0_0_0.5px_rgba(161,161,161,0.15)] focus:ring-1 focus:ring-slate-300")}
+              className="min-h-16 border-white/15 bg-slate-900/80 text-slate-100 shadow-[0_0_0_0.5px_rgba(148,163,184,0.3)] placeholder:text-slate-400 focus:ring-1 focus:ring-sky-400/60"
               value={cardForm.description}
               onChange={(event) => setCardForm((prev) => ({ ...prev, description: event.target.value }))}
             />
@@ -866,7 +1170,7 @@ export function SettingsPage() {
             />
           </ModalField>
 
-          <label className="flex items-center gap-2 pt-1 text-sm text-slate-700">
+          <label className="flex items-center gap-2 pt-1 text-sm text-slate-300">
             <input
               type="checkbox"
               checked={cardForm.enabled}
@@ -875,7 +1179,7 @@ export function SettingsPage() {
             启用服务
           </label>
 
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className="flex items-center gap-2 text-sm text-slate-300">
             <input
               type="checkbox"
               checked={cardForm.healthCheckEnabled}
@@ -939,6 +1243,38 @@ export function SettingsPage() {
               required
             />
           </ModalField>
+
+          <ModalField label="图标（可选）" hint="支持 Iconify、Emoji、图片 data URL 或 http(s) 地址">
+            <Input
+              className={MODAL_INPUT_CLASS}
+              value={searchForm.icon}
+              onChange={(event) => setSearchForm((prev) => ({ ...prev, icon: event.target.value }))}
+              placeholder="例如 tabler:world-search 或 https://..."
+            />
+          </ModalField>
+          <div className="flex items-center gap-2">
+            <label className={cn("inline-flex h-9 cursor-pointer items-center rounded-lg border px-3 text-xs", OUTLINE_DARK_BUTTON_CLASS)}>
+              上传图标
+              <input
+                className="hidden"
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    uploadSearchIcon(file).catch(() => undefined);
+                  }
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            {searchForm.icon && (
+              <span className="inline-flex items-center gap-1 rounded border border-white/15 bg-white/10 px-2 py-1 text-xs text-slate-200">
+                <AppIcon icon={searchForm.icon} className="h-3.5 w-3.5 text-slate-100" />
+                已设置图标
+              </span>
+            )}
+          </div>
 
           <Button type="submit" variant="default" className="h-9 w-full rounded-lg" disabled={saving}>
             {searchForm.id ? "保存修改" : "添加"}

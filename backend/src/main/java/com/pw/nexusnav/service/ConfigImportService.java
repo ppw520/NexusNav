@@ -37,6 +37,8 @@ public class ConfigImportService {
     public static final String NAV_VERSION_KEY = "nav_version";
     public static final String SYSTEM_HASH_KEY = "system_hash";
     public static final String SYSTEM_CONFIG_KEY = "system_config_json";
+    private static final int MAX_BACKGROUND_IMAGE_BYTES = 512 * 1024;
+    private static final int MAX_SEARCH_ICON_LENGTH = 2048;
 
     private static final BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder();
 
@@ -303,6 +305,16 @@ public class ConfigImportService {
         } else {
             model.setNetworkModePreference(model.getNetworkModePreference().toLowerCase());
         }
+        if (!StringUtils.hasText(model.getBackgroundType())) {
+            model.setBackgroundType("gradient");
+        } else {
+            model.setBackgroundType(model.getBackgroundType().trim().toLowerCase());
+        }
+        if (!StringUtils.hasText(model.getBackgroundImageDataUrl())) {
+            model.setBackgroundImageDataUrl(null);
+        } else {
+            model.setBackgroundImageDataUrl(model.getBackgroundImageDataUrl().trim());
+        }
         if (model.getSecurity().getSessionTimeoutMinutes() <= 0) {
             model.getSecurity().setSessionTimeoutMinutes(480);
         }
@@ -313,6 +325,11 @@ public class ConfigImportService {
             if (StringUtils.hasText(engine.getSearchUrlTemplate())) {
                 engine.setLanUrl(engine.getSearchUrlTemplate());
                 engine.setWanUrl(engine.getSearchUrlTemplate());
+            }
+            if (!StringUtils.hasText(engine.getIcon())) {
+                engine.setIcon(null);
+            } else {
+                engine.setIcon(engine.getIcon().trim());
             }
         }
     }
@@ -366,6 +383,10 @@ public class ConfigImportService {
         if (!isValidNetworkMode(model.getNetworkModePreference())) {
             throw new IllegalStateException("Invalid networkModePreference");
         }
+        if (!"gradient".equals(model.getBackgroundType()) && !"image".equals(model.getBackgroundType())) {
+            throw new IllegalStateException("Invalid backgroundType");
+        }
+        validateBackgroundDataUrl(model.getBackgroundImageDataUrl());
 
         Set<String> engineIds = new HashSet<>();
         for (ConfigModel.SearchEngineItem engine : model.getSearchEngines()) {
@@ -381,9 +402,36 @@ public class ConfigImportService {
             if (!StringUtils.hasText(engine.getSearchUrlTemplate())) {
                 throw new IllegalStateException("Search engine template is required: " + engine.getId());
             }
+            if (StringUtils.hasText(engine.getIcon()) && engine.getIcon().length() > MAX_SEARCH_ICON_LENGTH) {
+                throw new IllegalStateException("Search engine icon exceeds max length: " + engine.getId());
+            }
         }
         if (!engineIds.isEmpty() && !engineIds.contains(model.getDefaultSearchEngineId())) {
             throw new IllegalStateException("defaultSearchEngineId not found in searchEngines");
+        }
+    }
+
+    private void validateBackgroundDataUrl(String dataUrl) {
+        if (!StringUtils.hasText(dataUrl)) {
+            return;
+        }
+        String normalized = dataUrl.trim();
+        if (!normalized.startsWith("data:image/") || !normalized.contains(";base64,")) {
+            throw new IllegalStateException("backgroundImageDataUrl must be data:image/*;base64");
+        }
+        int base64Index = normalized.indexOf(";base64,");
+        if (base64Index < 0) {
+            throw new IllegalStateException("backgroundImageDataUrl must be base64 encoded");
+        }
+        String payload = normalized.substring(base64Index + ";base64,".length());
+        byte[] decoded;
+        try {
+            decoded = Base64.getDecoder().decode(payload);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException("backgroundImageDataUrl is not valid base64");
+        }
+        if (decoded.length > MAX_BACKGROUND_IMAGE_BYTES) {
+            throw new IllegalStateException("backgroundImageDataUrl exceeds 512KB");
         }
     }
 

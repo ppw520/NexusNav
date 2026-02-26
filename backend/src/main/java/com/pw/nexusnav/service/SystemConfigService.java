@@ -8,6 +8,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 
@@ -15,6 +16,8 @@ import java.util.Locale;
 public class SystemConfigService {
 
     private static final BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder();
+    private static final int MAX_BACKGROUND_IMAGE_BYTES = 512 * 1024;
+    private static final int MAX_SEARCH_ICON_LENGTH = 2048;
 
     private final ConfigImportService configImportService;
     private final ConfigMutationService configMutationService;
@@ -35,7 +38,8 @@ public class SystemConfigService {
                 .map(item -> new SystemConfigDTO.SearchEngineDTO(
                         item.getId(),
                         item.getName(),
-                        resolveTemplate(item, resolvedMode)
+                        resolveTemplate(item, resolvedMode),
+                        item.getIcon()
                 ))
                 .toList();
 
@@ -44,7 +48,11 @@ public class SystemConfigService {
                 resolvedMode,
                 model.getDefaultSearchEngineId(),
                 engines,
-                model.getSecurity().isEnabled()
+                model.getSecurity().isEnabled(),
+                model.getSecurity().isRequireAuthForConfig(),
+                model.isDailySentenceEnabled(),
+                model.getBackgroundType(),
+                model.getBackgroundImageDataUrl()
         );
     }
 
@@ -53,11 +61,15 @@ public class SystemConfigService {
         AdminConfigDTO dto = new AdminConfigDTO();
         dto.setNetworkModePreference(model.getNetworkModePreference());
         dto.setDefaultSearchEngineId(model.getDefaultSearchEngineId());
+        dto.setDailySentenceEnabled(model.isDailySentenceEnabled());
+        dto.setBackgroundType(model.getBackgroundType());
+        dto.setBackgroundImageDataUrl(model.getBackgroundImageDataUrl());
         dto.setSearchEngines(model.getSearchEngines().stream().map(this::toSearchEngineDto).toList());
 
         AdminConfigDTO.SecurityDTO securityDTO = new AdminConfigDTO.SecurityDTO();
         securityDTO.setEnabled(model.getSecurity().isEnabled());
         securityDTO.setSessionTimeoutMinutes(model.getSecurity().getSessionTimeoutMinutes());
+        securityDTO.setRequireAuthForConfig(model.getSecurity().isRequireAuthForConfig());
         dto.setSecurity(securityDTO);
         return dto;
     }
@@ -67,11 +79,15 @@ public class SystemConfigService {
             validateAdminConfigRequest(request);
             system.setNetworkModePreference(request.getNetworkModePreference().toLowerCase(Locale.ROOT));
             system.setDefaultSearchEngineId(request.getDefaultSearchEngineId().trim());
+            system.setDailySentenceEnabled(request.getDailySentenceEnabled() == null || request.getDailySentenceEnabled());
+            system.setBackgroundType(request.getBackgroundType().trim().toLowerCase(Locale.ROOT));
+            system.setBackgroundImageDataUrl(normalizeImageDataUrl(request.getBackgroundImageDataUrl()));
             system.setSearchEngines(request.getSearchEngines().stream().map(this::toSearchEngineModel).toList());
 
             ConfigModel.SecurityModel security = system.getSecurity();
             security.setEnabled(request.getSecurity().isEnabled());
             security.setSessionTimeoutMinutes(request.getSecurity().getSessionTimeoutMinutes());
+            security.setRequireAuthForConfig(Boolean.TRUE.equals(request.getSecurity().getRequireAuthForConfig()));
             system.setSecurity(security);
 
             if (StringUtils.hasText(request.getNewAdminPassword())) {
@@ -86,6 +102,7 @@ public class SystemConfigService {
         dto.setId(item.getId());
         dto.setName(item.getName());
         dto.setSearchUrlTemplate(resolveTemplate(item, ConfigModel.NETWORK_MODE_AUTO));
+        dto.setIcon(item.getIcon());
         return dto;
     }
 
@@ -96,6 +113,7 @@ public class SystemConfigService {
         item.setSearchUrlTemplate(request.getSearchUrlTemplate().trim());
         item.setLanUrl(item.getSearchUrlTemplate());
         item.setWanUrl(item.getSearchUrlTemplate());
+        item.setIcon(normalizeSearchIcon(request.getIcon()));
         return item;
     }
 
@@ -135,10 +153,66 @@ public class SystemConfigService {
         if (request.getSearchEngines() == null || request.getSearchEngines().isEmpty()) {
             throw new IllegalArgumentException("searchEngines cannot be empty");
         }
+        if (!StringUtils.hasText(request.getBackgroundType())) {
+            throw new IllegalArgumentException("backgroundType is required");
+        }
+        String normalizedBackgroundType = request.getBackgroundType().trim().toLowerCase(Locale.ROOT);
+        if (!"gradient".equals(normalizedBackgroundType) && !"image".equals(normalizedBackgroundType)) {
+            throw new IllegalArgumentException("backgroundType must be gradient or image");
+        }
+        validateBackgroundDataUrl(request.getBackgroundImageDataUrl());
+        for (AdminConfigUpdateRequest.SearchEngineItemRequest item : request.getSearchEngines()) {
+            String icon = normalizeSearchIcon(item.getIcon());
+            if (icon != null && icon.length() > MAX_SEARCH_ICON_LENGTH) {
+                throw new IllegalArgumentException("searchEngine icon exceeds max length");
+            }
+        }
         boolean defaultExists = request.getSearchEngines().stream()
                 .anyMatch(item -> item.getId().equals(request.getDefaultSearchEngineId()));
         if (!defaultExists) {
             throw new IllegalArgumentException("defaultSearchEngineId not found in searchEngines");
+        }
+    }
+
+    private String normalizeSearchIcon(String icon) {
+        if (!StringUtils.hasText(icon)) {
+            return null;
+        }
+        String value = icon.trim();
+        if (value.length() > MAX_SEARCH_ICON_LENGTH) {
+            throw new IllegalArgumentException("searchEngine icon exceeds max length");
+        }
+        return value;
+    }
+
+    private String normalizeImageDataUrl(String dataUrl) {
+        if (!StringUtils.hasText(dataUrl)) {
+            return null;
+        }
+        return dataUrl.trim();
+    }
+
+    private void validateBackgroundDataUrl(String dataUrl) {
+        if (!StringUtils.hasText(dataUrl)) {
+            return;
+        }
+        String normalized = dataUrl.trim();
+        if (!normalized.startsWith("data:image/") || !normalized.contains(";base64,")) {
+            throw new IllegalArgumentException("backgroundImageDataUrl must be data:image/*;base64");
+        }
+        int base64Index = normalized.indexOf(";base64,");
+        if (base64Index < 0) {
+            throw new IllegalArgumentException("backgroundImageDataUrl must be base64 encoded");
+        }
+        String payload = normalized.substring(base64Index + ";base64,".length());
+        byte[] decoded;
+        try {
+            decoded = Base64.getDecoder().decode(payload);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("backgroundImageDataUrl is not valid base64");
+        }
+        if (decoded.length > MAX_BACKGROUND_IMAGE_BYTES) {
+            throw new IllegalArgumentException("backgroundImageDataUrl exceeds 512KB");
         }
     }
 }

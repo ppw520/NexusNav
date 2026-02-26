@@ -43,6 +43,9 @@ public class ConfigModel {
         private String adminPassword = "";
         private String defaultSearchEngineId = "bing";
         private String networkModePreference = NETWORK_MODE_AUTO;
+        private boolean dailySentenceEnabled = true;
+        private String backgroundType = "gradient";
+        private String backgroundImageDataUrl;
         private List<SearchEngineItem> searchEngines = new ArrayList<>();
         private SecurityModel security = new SecurityModel();
 
@@ -68,6 +71,30 @@ public class ConfigModel {
 
         public void setNetworkModePreference(String networkModePreference) {
             this.networkModePreference = networkModePreference;
+        }
+
+        public boolean isDailySentenceEnabled() {
+            return dailySentenceEnabled;
+        }
+
+        public void setDailySentenceEnabled(boolean dailySentenceEnabled) {
+            this.dailySentenceEnabled = dailySentenceEnabled;
+        }
+
+        public String getBackgroundType() {
+            return backgroundType;
+        }
+
+        public void setBackgroundType(String backgroundType) {
+            this.backgroundType = backgroundType;
+        }
+
+        public String getBackgroundImageDataUrl() {
+            return backgroundImageDataUrl;
+        }
+
+        public void setBackgroundImageDataUrl(String backgroundImageDataUrl) {
+            this.backgroundImageDataUrl = backgroundImageDataUrl;
         }
 
         public List<SearchEngineItem> getSearchEngines() {
@@ -234,6 +261,7 @@ public class ConfigModel {
         private String searchUrlTemplate;
         private String lanUrl;
         private String wanUrl;
+        private String icon;
 
         public String getId() {
             return id;
@@ -274,11 +302,20 @@ public class ConfigModel {
         public void setWanUrl(String wanUrl) {
             this.wanUrl = wanUrl;
         }
+
+        public String getIcon() {
+            return icon;
+        }
+
+        public void setIcon(String icon) {
+            this.icon = icon;
+        }
     }
 
     public static class SecurityModel {
         private boolean enabled = true;
         private int sessionTimeoutMinutes = 480;
+        private boolean requireAuthForConfig;
 
         public boolean isEnabled() {
             return enabled;
@@ -294,6 +331,14 @@ public class ConfigModel {
 
         public void setSessionTimeoutMinutes(int sessionTimeoutMinutes) {
             this.sessionTimeoutMinutes = sessionTimeoutMinutes;
+        }
+
+        public boolean isRequireAuthForConfig() {
+            return requireAuthForConfig;
+        }
+
+        public void setRequireAuthForConfig(boolean requireAuthForConfig) {
+            this.requireAuthForConfig = requireAuthForConfig;
         }
     }
 }

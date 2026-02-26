@@ -7,6 +7,9 @@ public class AdminConfigDTO {
 
     private String networkModePreference;
     private String defaultSearchEngineId;
+    private boolean dailySentenceEnabled;
+    private String backgroundType;
+    private String backgroundImageDataUrl;
     private List<SearchEngineItemDTO> searchEngines = new ArrayList<>();
     private SecurityDTO security;
 
@@ -24,6 +27,30 @@ public class AdminConfigDTO {
 
     public void setDefaultSearchEngineId(String defaultSearchEngineId) {
         this.defaultSearchEngineId = defaultSearchEngineId;
+    }
+
+    public boolean isDailySentenceEnabled() {
+        return dailySentenceEnabled;
+    }
+
+    public void setDailySentenceEnabled(boolean dailySentenceEnabled) {
+        this.dailySentenceEnabled = dailySentenceEnabled;
+    }
+
+    public String getBackgroundType() {
+        return backgroundType;
+    }
+
+    public void setBackgroundType(String backgroundType) {
+        this.backgroundType = backgroundType;
+    }
+
+    public String getBackgroundImageDataUrl() {
+        return backgroundImageDataUrl;
+    }
+
+    public void setBackgroundImageDataUrl(String backgroundImageDataUrl) {
+        this.backgroundImageDataUrl = backgroundImageDataUrl;
     }
 
     public List<SearchEngineItemDTO> getSearchEngines() {
@@ -46,6 +73,7 @@ public class AdminConfigDTO {
         private String id;
         private String name;
         private String searchUrlTemplate;
+        private String icon;
 
         public String getId() {
             return id;
@@ -70,11 +98,20 @@ public class AdminConfigDTO {
         public void setSearchUrlTemplate(String searchUrlTemplate) {
             this.searchUrlTemplate = searchUrlTemplate;
         }
+
+        public String getIcon() {
+            return icon;
+        }
+
+        public void setIcon(String icon) {
+            this.icon = icon;
+        }
     }
 
     public static class SecurityDTO {
         private boolean enabled;
         private int sessionTimeoutMinutes;
+        private boolean requireAuthForConfig;
 
         public boolean isEnabled() {
             return enabled;
@@ -90,6 +127,14 @@ public class AdminConfigDTO {
 
         public void setSessionTimeoutMinutes(int sessionTimeoutMinutes) {
             this.sessionTimeoutMinutes = sessionTimeoutMinutes;
+        }
+
+        public boolean isRequireAuthForConfig() {
+            return requireAuthForConfig;
+        }
+
+        public void setRequireAuthForConfig(boolean requireAuthForConfig) {
+            this.requireAuthForConfig = requireAuthForConfig;
         }
     }
 }

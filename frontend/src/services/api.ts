@@ -10,7 +10,8 @@ import type {
   GroupDTO,
   GroupPayload,
   NavConfigImportPayload,
-  SystemConfigDTO
+  SystemConfigDTO,
+  VerifyConfigResponse
 } from "../types";
 
 const api = axios.create({
@@ -46,6 +47,11 @@ export async function logout(): Promise<AuthSessionDTO> {
 
 export async function fetchSession(): Promise<AuthSessionDTO> {
   const { data } = await api.get<ApiResponse<AuthSessionDTO>>("/v1/auth/session");
+  return data.data;
+}
+
+export async function verifyConfig(password: string): Promise<VerifyConfigResponse> {
+  const { data } = await api.post<ApiResponse<VerifyConfigResponse>>("/v1/auth/verify-config", { password });
   return data.data;
 }
 

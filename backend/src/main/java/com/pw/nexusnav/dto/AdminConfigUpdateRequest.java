@@ -19,6 +19,14 @@ public class AdminConfigUpdateRequest {
     @Size(max = 64)
     private String defaultSearchEngineId;
 
+    private Boolean dailySentenceEnabled;
+
+    @NotBlank
+    @Pattern(regexp = "^(gradient|image)$")
+    private String backgroundType;
+
+    private String backgroundImageDataUrl;
+
     @NotNull
     @Valid
     private List<SearchEngineItemRequest> searchEngines = new ArrayList<>();
@@ -44,6 +52,30 @@ public class AdminConfigUpdateRequest {
 
     public void setDefaultSearchEngineId(String defaultSearchEngineId) {
         this.defaultSearchEngineId = defaultSearchEngineId;
+    }
+
+    public Boolean getDailySentenceEnabled() {
+        return dailySentenceEnabled;
+    }
+
+    public void setDailySentenceEnabled(Boolean dailySentenceEnabled) {
+        this.dailySentenceEnabled = dailySentenceEnabled;
+    }
+
+    public String getBackgroundType() {
+        return backgroundType;
+    }
+
+    public void setBackgroundType(String backgroundType) {
+        this.backgroundType = backgroundType;
+    }
+
+    public String getBackgroundImageDataUrl() {
+        return backgroundImageDataUrl;
+    }
+
+    public void setBackgroundImageDataUrl(String backgroundImageDataUrl) {
+        this.backgroundImageDataUrl = backgroundImageDataUrl;
     }
 
     public List<SearchEngineItemRequest> getSearchEngines() {
@@ -83,6 +115,9 @@ public class AdminConfigUpdateRequest {
         @Size(max = 2048)
         private String searchUrlTemplate;
 
+        @Size(max = 2048)
+        private String icon;
+
         public String getId() {
             return id;
         }
@@ -106,11 +141,20 @@ public class AdminConfigUpdateRequest {
         public void setSearchUrlTemplate(String searchUrlTemplate) {
             this.searchUrlTemplate = searchUrlTemplate;
         }
+
+        public String getIcon() {
+            return icon;
+        }
+
+        public void setIcon(String icon) {
+            this.icon = icon;
+        }
     }
 
     public static class SecurityRequest {
         private boolean enabled;
         private int sessionTimeoutMinutes;
+        private Boolean requireAuthForConfig;
 
         public boolean isEnabled() {
             return enabled;
@@ -126,6 +170,14 @@ public class AdminConfigUpdateRequest {
 
         public void setSessionTimeoutMinutes(int sessionTimeoutMinutes) {
             this.sessionTimeoutMinutes = sessionTimeoutMinutes;
+        }
+
+        public Boolean getRequireAuthForConfig() {
+            return requireAuthForConfig;
+        }
+
+        public void setRequireAuthForConfig(Boolean requireAuthForConfig) {
+            this.requireAuthForConfig = requireAuthForConfig;
         }
     }
 }

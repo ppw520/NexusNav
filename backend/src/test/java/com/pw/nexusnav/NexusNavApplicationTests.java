@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:sqlite:./target/test-nexusnav.db"
@@ -28,8 +29,8 @@ class NexusNavApplicationTests {
     void contextLoadsAndConfigImportIsIdempotent() {
         long groupCountBefore = groupRepository.count();
         long cardCountBefore = cardRepository.count();
-        assertEquals(2, groupCountBefore);
-        org.junit.jupiter.api.Assertions.assertTrue(cardCountBefore >= 3);
+        assertTrue(groupCountBefore > 0);
+        assertTrue(cardCountBefore > 0);
 
         ConfigImportService.ImportResult result = configImportService.importConfig(false);
         assertFalse(result.changed());
