@@ -62,6 +62,11 @@ public class ImportNavConfigRequest {
         private String lanUrl;
         private String wanUrl;
         private String openMode;
+        private String cardType;
+        private String sshHost;
+        private Integer sshPort;
+        private String sshUsername;
+        private String sshAuthMode;
         private String icon;
         private String description;
         private int orderIndex;
@@ -122,6 +127,46 @@ public class ImportNavConfigRequest {
 
         public void setOpenMode(String openMode) {
             this.openMode = openMode;
+        }
+
+        public String getCardType() {
+            return cardType;
+        }
+
+        public void setCardType(String cardType) {
+            this.cardType = cardType;
+        }
+
+        public String getSshHost() {
+            return sshHost;
+        }
+
+        public void setSshHost(String sshHost) {
+            this.sshHost = sshHost;
+        }
+
+        public Integer getSshPort() {
+            return sshPort;
+        }
+
+        public void setSshPort(Integer sshPort) {
+            this.sshPort = sshPort;
+        }
+
+        public String getSshUsername() {
+            return sshUsername;
+        }
+
+        public void setSshUsername(String sshUsername) {
+            this.sshUsername = sshUsername;
+        }
+
+        public String getSshAuthMode() {
+            return sshAuthMode;
+        }
+
+        public void setSshAuthMode(String sshAuthMode) {
+            this.sshAuthMode = sshAuthMode;
         }
 
         public String getIcon() {

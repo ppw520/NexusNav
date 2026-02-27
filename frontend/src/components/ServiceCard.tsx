@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, TerminalSquare } from "lucide-react";
 import type { CardDTO, HealthStatusDTO } from "../types";
 import { AppIcon } from "./AppIcon";
 
@@ -67,7 +67,8 @@ export function ServiceCard({ service, health, onClick, draggable, onDragStart, 
         <div className="px-4 pb-4">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span className="mr-2 flex-1 truncate">{service.url}</span>
-            {service.openMode === "newtab" && <ExternalLink className="h-3 w-3 flex-shrink-0" />}
+            {service.cardType === "ssh" && <TerminalSquare className="h-3 w-3 flex-shrink-0" />}
+            {service.cardType !== "ssh" && service.openMode === "newtab" && <ExternalLink className="h-3 w-3 flex-shrink-0" />}
           </div>
         </div>
       </article>

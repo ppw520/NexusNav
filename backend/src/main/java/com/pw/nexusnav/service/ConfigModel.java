@@ -8,6 +8,10 @@ public class ConfigModel {
     public static final String NETWORK_MODE_AUTO = "auto";
     public static final String NETWORK_MODE_LAN = "lan";
     public static final String NETWORK_MODE_WAN = "wan";
+    public static final String CARD_TYPE_GENERIC = "generic";
+    public static final String CARD_TYPE_SSH = "ssh";
+    public static final String SSH_AUTH_PASSWORD = "password";
+    public static final String SSH_AUTH_PRIVATE_KEY = "privatekey";
 
     public static class NavModel {
         private String version;
@@ -152,6 +156,11 @@ public class ConfigModel {
         private String lanUrl;
         private String wanUrl;
         private String openMode;
+        private String cardType = CARD_TYPE_GENERIC;
+        private String sshHost;
+        private Integer sshPort;
+        private String sshUsername;
+        private String sshAuthMode = SSH_AUTH_PASSWORD;
         private String icon;
         private String description;
         private int orderIndex;
@@ -212,6 +221,46 @@ public class ConfigModel {
 
         public void setOpenMode(String openMode) {
             this.openMode = openMode;
+        }
+
+        public String getCardType() {
+            return cardType;
+        }
+
+        public void setCardType(String cardType) {
+            this.cardType = cardType;
+        }
+
+        public String getSshHost() {
+            return sshHost;
+        }
+
+        public void setSshHost(String sshHost) {
+            this.sshHost = sshHost;
+        }
+
+        public Integer getSshPort() {
+            return sshPort;
+        }
+
+        public void setSshPort(Integer sshPort) {
+            this.sshPort = sshPort;
+        }
+
+        public String getSshUsername() {
+            return sshUsername;
+        }
+
+        public void setSshUsername(String sshUsername) {
+            this.sshUsername = sshUsername;
+        }
+
+        public String getSshAuthMode() {
+            return sshAuthMode;
+        }
+
+        public void setSshAuthMode(String sshAuthMode) {
+            this.sshAuthMode = sshAuthMode;
         }
 
         public String getIcon() {
