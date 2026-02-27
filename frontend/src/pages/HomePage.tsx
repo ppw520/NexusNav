@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { EmbyStatsWindow } from "../components/EmbyStatsWindow";
 import { FloatingWindow } from "../components/FloatingWindow";
 import { SshTerminalWindow } from "../components/SshTerminalWindow";
 import { ServiceCard } from "../components/ServiceCard";
+import { loadEmbyStats } from "../services/emby";
 import { useCardStore } from "../store/useCardStore";
 import { useHealthStore } from "../store/useHealthStore";
 import { useSystemStore } from "../store/useSystemStore";
-import type { CardDTO } from "../types";
+import type { CardDTO, EmbyStatsDTO } from "../types";
 
 type OpenIframeWindow = {
   id: string;
@@ -31,7 +33,17 @@ type OpenSshWindow = {
   zIndex: number;
 };
 
-type OpenWindow = OpenIframeWindow | OpenSshWindow;
+type OpenEmbyWindow = {
+  id: string;
+  cardId: string;
+  title: string;
+  icon?: string;
+  type: "emby";
+  card: CardDTO;
+  zIndex: number;
+};
+
+type OpenWindow = OpenIframeWindow | OpenSshWindow | OpenEmbyWindow;
 
 export function HomePage() {
   const groups = useCardStore((state) => state.groups);
@@ -50,6 +62,7 @@ export function HomePage() {
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
   const [maxZIndex, setMaxZIndex] = useState(1000);
+  const [embyStatsByCardId, setEmbyStatsByCardId] = useState<Record<string, EmbyStatsDTO>>({});
 
   useEffect(() => {
     Promise.all([loadCards(), loadSystem()]).catch(() => {
@@ -82,6 +95,43 @@ export function HomePage() {
     };
   }, [cardsWithRuntimeMode, probeCards, resetHealth]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const embyCards = cardsWithRuntimeMode.filter((card) => card.cardType === "emby");
+    if (!embyCards.length) {
+      setEmbyStatsByCardId({});
+      return;
+    }
+
+    const refresh = async () => {
+      const next: Record<string, EmbyStatsDTO> = {};
+      await Promise.all(
+        embyCards.map(async (card) => {
+          try {
+            next[card.id] = await loadEmbyStats(card);
+          } catch {
+            // keep previous snapshot when refresh fails
+          }
+        })
+      );
+
+      if (cancelled) {
+        return;
+      }
+      setEmbyStatsByCardId((previous) => ({ ...previous, ...next }));
+    };
+
+    refresh().catch(() => undefined);
+    const timer = window.setInterval(() => {
+      refresh().catch(() => undefined);
+    }, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [cardsWithRuntimeMode]);
+
   const groupedCards = useMemo(() => {
     const grouped: Record<string, CardDTO[]> = {};
     for (const card of cardsWithRuntimeMode) {
@@ -111,6 +161,27 @@ export function HomePage() {
   };
 
   const handleServiceCardClick = (card: CardDTO) => {
+    if (card.cardType === "emby") {
+      const existingEmby = openWindows.find((window) => window.cardId === card.id);
+      if (existingEmby) {
+        focusWindow(existingEmby.id);
+        return;
+      }
+
+      const nextEmby: OpenEmbyWindow = {
+        id: `window-${card.id}-${Date.now()}`,
+        cardId: card.id,
+        title: card.name,
+        icon: card.icon,
+        type: "emby",
+        card,
+        zIndex: maxZIndex + 1
+      };
+      setOpenWindows((previous) => [...previous, nextEmby]);
+      setMaxZIndex((value) => value + 1);
+      return;
+    }
+
     if (card.cardType === "ssh") {
       const existingSsh = openWindows.find((window) => window.cardId === card.id);
       if (existingSsh) {
@@ -177,6 +248,7 @@ export function HomePage() {
                     key={service.id}
                     service={service}
                     health={healthByCardId[service.id]}
+                    embyMediaTotal={embyStatsByCardId[service.id]?.mediaTotal}
                     draggable
                     onDragStart={() => setDraggingCardId(service.id)}
                     onDrop={() => {
@@ -204,23 +276,47 @@ export function HomePage() {
         )}
       </div>
 
-      {openWindows.map((window) =>
-        window.type === "ssh" ? (
-          <SshTerminalWindow
-            key={window.id}
-            id={window.id}
-            title={window.title}
-            icon={window.icon}
-            cardId={window.cardId}
-            sshHost={window.sshHost}
-            sshPort={window.sshPort}
-            sshUsername={window.sshUsername}
-            sshAuthMode={window.sshAuthMode}
-            zIndex={window.zIndex}
-            onClose={() => setOpenWindows((previous) => previous.filter((item) => item.id !== window.id))}
-            onFocus={() => focusWindow(window.id)}
-          />
-        ) : (
+      {openWindows.map((window) => {
+        if (window.type === "ssh") {
+          return (
+            <SshTerminalWindow
+              key={window.id}
+              id={window.id}
+              title={window.title}
+              icon={window.icon}
+              cardId={window.cardId}
+              sshHost={window.sshHost}
+              sshPort={window.sshPort}
+              sshUsername={window.sshUsername}
+              sshAuthMode={window.sshAuthMode}
+              zIndex={window.zIndex}
+              onClose={() => setOpenWindows((previous) => previous.filter((item) => item.id !== window.id))}
+              onFocus={() => focusWindow(window.id)}
+            />
+          );
+        }
+        if (window.type === "emby") {
+          return (
+            <EmbyStatsWindow
+              key={window.id}
+              id={window.id}
+              title={window.title}
+              icon={window.icon}
+              card={window.card}
+              initialStats={embyStatsByCardId[window.cardId]}
+              zIndex={window.zIndex}
+              onStatsUpdate={(stats) =>
+                setEmbyStatsByCardId((previous) => ({
+                  ...previous,
+                  [window.cardId]: stats
+                }))
+              }
+              onClose={() => setOpenWindows((previous) => previous.filter((item) => item.id !== window.id))}
+              onFocus={() => focusWindow(window.id)}
+            />
+          );
+        }
+        return (
           <FloatingWindow
             key={window.id}
             id={window.id}
@@ -231,8 +327,8 @@ export function HomePage() {
             onClose={() => setOpenWindows((previous) => previous.filter((item) => item.id !== window.id))}
             onFocus={() => focusWindow(window.id)}
           />
-        )
-      )}
+        );
+      })}
     </>
   );
 }

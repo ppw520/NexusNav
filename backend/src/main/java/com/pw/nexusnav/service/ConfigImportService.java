@@ -249,24 +249,40 @@ public class ConfigImportService {
             GroupEntity group = groupRepository.findById(item.getGroupId())
                     .orElseThrow(() -> new IllegalStateException("Card group not found: " + item.getGroupId()));
             CardEntity entity = cardRepository.findById(item.getId()).orElseGet(CardEntity::new);
+            String cardType = normalizeCardType(item.getCardType());
             entity.setId(item.getId());
             entity.setGroup(group);
             entity.setName(item.getName());
             entity.setLanUrl(item.getLanUrl());
             entity.setWanUrl(item.getWanUrl());
-            String baseUrl = resolveCardUrl(item.getCardType(), item.getUrl(), item.getLanUrl(), item.getWanUrl(), item.getSshHost(), item.getSshPort());
+            String baseUrl = resolveCardUrl(cardType, item.getUrl(), item.getLanUrl(), item.getWanUrl(), item.getSshHost(), item.getSshPort());
             entity.setUrl(baseUrl == null ? "" : baseUrl);
             entity.setOpenMode(normalizeOpenMode(item.getOpenMode()));
-            entity.setCardType(normalizeCardType(item.getCardType()));
-            entity.setSshHost(item.getSshHost());
-            entity.setSshPort(item.getSshPort());
-            entity.setSshUsername(item.getSshUsername());
-            entity.setSshAuthMode(item.getSshAuthMode());
+            entity.setCardType(cardType);
+            if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
+                entity.setSshHost(item.getSshHost());
+                entity.setSshPort(item.getSshPort());
+                entity.setSshUsername(item.getSshUsername());
+                entity.setSshAuthMode(item.getSshAuthMode());
+                entity.setEmbyApiKey(null);
+            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
+                entity.setSshHost(null);
+                entity.setSshPort(null);
+                entity.setSshUsername(null);
+                entity.setSshAuthMode(null);
+                entity.setEmbyApiKey(item.getEmbyApiKey());
+            } else {
+                entity.setSshHost(null);
+                entity.setSshPort(null);
+                entity.setSshUsername(null);
+                entity.setSshAuthMode(null);
+                entity.setEmbyApiKey(null);
+            }
             entity.setIcon(item.getIcon());
             entity.setDescription(item.getDescription());
             entity.setOrderIndex(item.getOrderIndex());
             entity.setEnabled(item.isEnabled());
-            entity.setHealthCheckEnabled(item.isHealthCheckEnabled());
+            entity.setHealthCheckEnabled(isHealthCheckSupported(cardType) && item.isHealthCheckEnabled());
             cardRepository.save(entity);
             cardIds.add(item.getId());
         }
@@ -300,11 +316,19 @@ public class ConfigImportService {
                 card.setSshPort(normalizeSshPort(card.getSshPort()));
                 card.setSshUsername(emptyToNull(card.getSshUsername()));
                 card.setSshAuthMode(normalizeSshAuthMode(card.getSshAuthMode()));
+                card.setEmbyApiKey(null);
+            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
+                card.setSshHost(null);
+                card.setSshPort(null);
+                card.setSshUsername(null);
+                card.setSshAuthMode(null);
+                card.setEmbyApiKey(emptyToNull(card.getEmbyApiKey()));
             } else {
                 card.setSshHost(null);
                 card.setSshPort(null);
                 card.setSshUsername(null);
                 card.setSshAuthMode(null);
+                card.setEmbyApiKey(null);
             }
             String fallbackUrl = resolveCardUrl(
                     cardType,
@@ -315,6 +339,7 @@ public class ConfigImportService {
                     card.getSshPort()
             );
             card.setUrl(fallbackUrl == null ? "" : fallbackUrl);
+            card.setHealthCheckEnabled(isHealthCheckSupported(cardType) && card.isHealthCheckEnabled());
         }
     }
 
@@ -400,6 +425,13 @@ public class ConfigImportService {
                     throw new IllegalStateException("SSH username is required: " + card.getId());
                 }
                 card.setSshAuthMode(normalizeSshAuthMode(card.getSshAuthMode()));
+            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
+                if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
+                    throw new IllegalStateException("Emby url is required: " + card.getId());
+                }
+                if (!StringUtils.hasText(card.getEmbyApiKey())) {
+                    throw new IllegalStateException("Emby API key is required: " + card.getId());
+                }
             } else if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
                 throw new IllegalStateException("Card url is required: " + card.getId());
             }
@@ -407,6 +439,7 @@ public class ConfigImportService {
             if (!normalizedMode.equals(card.getOpenMode())) {
                 card.setOpenMode(normalizedMode);
             }
+            card.setHealthCheckEnabled(isHealthCheckSupported(cardType) && card.isHealthCheckEnabled());
         }
     }
 
@@ -538,7 +571,9 @@ public class ConfigImportService {
             return ConfigModel.CARD_TYPE_GENERIC;
         }
         String normalized = cardType.trim().toLowerCase();
-        if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized) && !ConfigModel.CARD_TYPE_SSH.equals(normalized)) {
+        if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized)
+                && !ConfigModel.CARD_TYPE_SSH.equals(normalized)
+                && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)) {
             throw new IllegalStateException("Invalid cardType: " + cardType);
         }
         return normalized;
@@ -585,6 +620,10 @@ public class ConfigImportService {
 
     private String emptyToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private boolean isHealthCheckSupported(String cardType) {
+        return ConfigModel.CARD_TYPE_GENERIC.equals(cardType);
     }
 
     private boolean isValidNetworkMode(String mode) {

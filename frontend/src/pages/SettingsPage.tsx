@@ -64,6 +64,7 @@ type CardForm = {
   sshPort: string;
   sshUsername: string;
   sshAuthMode: SshAuthMode;
+  embyApiKey: string;
   icon: string;
   description: string;
   openMode: CardOpenMode;
@@ -187,6 +188,7 @@ export function SettingsPage() {
     sshPort: "22",
     sshUsername: "",
     sshAuthMode: "password",
+    embyApiKey: "",
     icon: "",
     description: "",
     openMode: "iframe",
@@ -281,12 +283,13 @@ export function SettingsPage() {
       sshPort: "22",
       sshUsername: "",
       sshAuthMode: "password",
+      embyApiKey: "",
       icon: "",
       description: "",
       openMode: "iframe",
       orderIndex: "0",
       enabled: true,
-      healthCheckEnabled: cardType !== "ssh"
+      healthCheckEnabled: cardType === "generic"
     });
 
   const resetGroupForm = () => setGroupForm({ name: "", orderIndex: "0" });
@@ -310,6 +313,7 @@ export function SettingsPage() {
       sshPort: String(card.sshPort || 22),
       sshUsername: card.sshUsername || "",
       sshAuthMode: card.sshAuthMode || "password",
+      embyApiKey: card.embyApiKey || "",
       icon: card.icon || "",
       description: card.description || "",
       openMode: card.openMode,
@@ -428,6 +432,16 @@ export function SettingsPage() {
       toast.error("SSH 卡片需要填写主机和用户名");
       return;
     }
+    if (cardForm.cardType === "emby") {
+      if (!cardForm.embyApiKey.trim()) {
+        toast.error("Emby 卡片需要填写 API Key");
+        return;
+      }
+      if (!cardForm.url.trim() && !cardForm.lanUrl.trim() && !cardForm.wanUrl.trim()) {
+        toast.error("Emby 卡片至少需要填写一个地址");
+        return;
+      }
+    }
     setSaving(true);
     try {
       const normalizedOrderIndex = Number.isNaN(Number(cardForm.orderIndex))
@@ -447,12 +461,13 @@ export function SettingsPage() {
         sshPort: cardForm.cardType === "ssh" ? normalizedSshPort : undefined,
         sshUsername: cardForm.cardType === "ssh" ? cardForm.sshUsername || undefined : undefined,
         sshAuthMode: cardForm.cardType === "ssh" ? cardForm.sshAuthMode : undefined,
+        embyApiKey: cardForm.cardType === "emby" ? cardForm.embyApiKey || undefined : undefined,
         icon: cardForm.icon || undefined,
         description: cardForm.description || undefined,
-        openMode: cardForm.cardType === "ssh" ? "iframe" : cardForm.openMode,
+        openMode: cardForm.cardType === "generic" ? cardForm.openMode : "iframe",
         orderIndex: normalizedOrderIndex,
         enabled: cardForm.enabled,
-        healthCheckEnabled: cardForm.cardType === "ssh" ? false : cardForm.healthCheckEnabled
+        healthCheckEnabled: cardForm.cardType === "generic" ? cardForm.healthCheckEnabled : false
       };
       if (cardForm.id) {
         await updateCard(cardForm.id, payload);
@@ -573,6 +588,7 @@ export function SettingsPage() {
           sshPort?: unknown;
           sshUsername?: unknown;
           sshAuthMode?: unknown;
+          embyApiKey?: unknown;
           icon?: unknown;
           description?: unknown;
           orderIndex?: unknown;
@@ -705,7 +721,12 @@ export function SettingsPage() {
                         SSH
                       </span>
                     )}
-                    {card.cardType !== "ssh" && card.openMode === "newtab" && (
+                    {card.cardType === "emby" && (
+                      <span className="rounded border border-sky-400/40 bg-sky-500/10 px-1.5 py-0.5 text-[10px] text-sky-300">
+                        EMBY
+                      </span>
+                    )}
+                    {card.cardType === "generic" && card.openMode === "newtab" && (
                       <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
                     )}
                   </div>
@@ -1148,23 +1169,24 @@ export function SettingsPage() {
                   ...prev,
                   cardType: nextType,
                   openMode: "iframe",
-                  healthCheckEnabled: nextType === "ssh" ? false : prev.healthCheckEnabled
+                  healthCheckEnabled: nextType === "generic" ? prev.healthCheckEnabled : false
                 }));
               }}
             >
               <option value="generic">通用</option>
               <option value="ssh">SSH 终端</option>
+              <option value="emby">Emby 统计</option>
             </select>
           </ModalField>
 
-          {cardForm.cardType === "generic" && (
+          {cardForm.cardType !== "ssh" && (
             <>
-              <ModalField label="默认地址">
+              <ModalField label={cardForm.cardType === "emby" ? "默认地址（可选）" : "默认地址"}>
                 <Input
                   className={MODAL_INPUT_CLASS}
                   value={cardForm.url}
                   onChange={(event) => setCardForm((prev) => ({ ...prev, url: event.target.value }))}
-                  required
+                  required={cardForm.cardType === "generic"}
                 />
               </ModalField>
 
@@ -1184,6 +1206,18 @@ export function SettingsPage() {
                 />
               </ModalField>
             </>
+          )}
+
+          {cardForm.cardType === "emby" && (
+            <ModalField label="Emby API Key">
+              <Input
+                className={MODAL_INPUT_CLASS}
+                type="password"
+                value={cardForm.embyApiKey}
+                onChange={(event) => setCardForm((prev) => ({ ...prev, embyApiKey: event.target.value }))}
+                required
+              />
+            </ModalField>
           )}
 
           {cardForm.cardType === "ssh" && (
@@ -1263,7 +1297,7 @@ export function SettingsPage() {
             </select>
           </ModalField>
 
-          {cardForm.cardType !== "ssh" && (
+          {cardForm.cardType === "generic" && (
             <ModalField label="打开方式">
               <select
                 className={MODAL_SELECT_CLASS}
@@ -1295,7 +1329,7 @@ export function SettingsPage() {
             启用服务
           </label>
 
-          {cardForm.cardType !== "ssh" && (
+          {cardForm.cardType === "generic" && (
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input
                 type="checkbox"
