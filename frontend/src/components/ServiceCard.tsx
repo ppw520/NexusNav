@@ -1,11 +1,12 @@
 import { ExternalLink, MonitorPlay, TerminalSquare } from "lucide-react";
-import type { CardDTO, HealthStatusDTO } from "../types";
+import type { CardDTO, HealthStatusDTO, TorrentStatsDTO } from "../types";
 import { AppIcon } from "./AppIcon";
 
 type ServiceCardProps = {
   service: CardDTO;
   health?: HealthStatusDTO;
   embyMediaTotal?: number;
+  torrentStats?: TorrentStatsDTO;
   onClick?: () => void;
   draggable?: boolean;
   onDragStart?: () => void;
@@ -33,7 +34,23 @@ function getTopBorderColor(service: CardDTO, health?: HealthStatusDTO) {
   return "#0ea5e9";
 }
 
-export function ServiceCard({ service, health, embyMediaTotal, onClick, draggable, onDragStart, onDrop }: ServiceCardProps) {
+export function ServiceCard({
+  service,
+  health,
+  embyMediaTotal,
+  torrentStats,
+  onClick,
+  draggable,
+  onDragStart,
+  onDrop
+}: ServiceCardProps) {
+  const detailText =
+    service.cardType === "emby"
+      ? `媒体总数: ${embyMediaTotal ?? "--"}`
+      : service.cardType === "qbittorrent" || service.cardType === "transmission"
+        ? `↓ ${formatSpeed(torrentStats?.downloadSpeed)} · ↑ ${formatSpeed(torrentStats?.uploadSpeed)}`
+        : service.url;
+
   return (
     <div
       draggable={draggable}
@@ -67,15 +84,35 @@ export function ServiceCard({ service, health, embyMediaTotal, onClick, draggabl
 
         <div className="px-4 pb-4">
           <div className="flex items-center justify-between text-xs text-gray-400">
-            <span className="mr-2 flex-1 truncate">
-              {service.cardType === "emby" ? `媒体总数: ${embyMediaTotal ?? "--"}` : service.url}
-            </span>
+            <span className="mr-2 flex-1 truncate">{detailText}</span>
             {service.cardType === "ssh" && <TerminalSquare className="h-3 w-3 flex-shrink-0" />}
             {service.cardType === "emby" && <MonitorPlay className="h-3 w-3 flex-shrink-0" />}
             {service.cardType === "generic" && service.openMode === "newtab" && <ExternalLink className="h-3 w-3 flex-shrink-0" />}
+            {service.cardType === "qbittorrent" && (
+              <span className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">QBT</span>
+            )}
+            {service.cardType === "transmission" && (
+              <span className="rounded border border-indigo-400/40 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] text-indigo-200">TR</span>
+            )}
           </div>
         </div>
       </article>
     </div>
   );
+}
+
+function formatSpeed(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return "--";
+  }
+  if (value < 1024) {
+    return `${value.toFixed(0)} B/s`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB/s`;
+  }
+  if (value < 1024 * 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB/s`;
+  }
+  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB/s`;
 }

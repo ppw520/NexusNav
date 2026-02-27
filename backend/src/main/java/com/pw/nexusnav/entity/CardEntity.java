@@ -53,6 +53,18 @@ public class CardEntity {
     @Column(name = "emby_api_key", length = 512)
     private String embyApiKey;
 
+    @Column(name = "qbittorrent_username", length = 128)
+    private String qbittorrentUsername;
+
+    @Column(name = "qbittorrent_password", length = 512)
+    private String qbittorrentPassword;
+
+    @Column(name = "transmission_username", length = 128)
+    private String transmissionUsername;
+
+    @Column(name = "transmission_password", length = 512)
+    private String transmissionPassword;
+
     @Column(length = 128)
     private String icon;
 
@@ -170,6 +182,38 @@ public class CardEntity {
 
     public void setEmbyApiKey(String embyApiKey) {
         this.embyApiKey = embyApiKey;
+    }
+
+    public String getQbittorrentUsername() {
+        return qbittorrentUsername;
+    }
+
+    public void setQbittorrentUsername(String qbittorrentUsername) {
+        this.qbittorrentUsername = qbittorrentUsername;
+    }
+
+    public String getQbittorrentPassword() {
+        return qbittorrentPassword;
+    }
+
+    public void setQbittorrentPassword(String qbittorrentPassword) {
+        this.qbittorrentPassword = qbittorrentPassword;
+    }
+
+    public String getTransmissionUsername() {
+        return transmissionUsername;
+    }
+
+    public void setTransmissionUsername(String transmissionUsername) {
+        this.transmissionUsername = transmissionUsername;
+    }
+
+    public String getTransmissionPassword() {
+        return transmissionPassword;
+    }
+
+    public void setTransmissionPassword(String transmissionPassword) {
+        this.transmissionPassword = transmissionPassword;
     }
 
     public String getIcon() {

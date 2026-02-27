@@ -5,10 +5,12 @@ import { FloatingWindow } from "../components/FloatingWindow";
 import { SshTerminalWindow } from "../components/SshTerminalWindow";
 import { ServiceCard } from "../components/ServiceCard";
 import { loadEmbyStats } from "../services/emby";
+import { loadQbittorrentStats, loadTransmissionStats } from "../services/torrent";
 import { useCardStore } from "../store/useCardStore";
 import { useHealthStore } from "../store/useHealthStore";
 import { useSystemStore } from "../store/useSystemStore";
-import type { CardDTO, EmbyStatsDTO } from "../types";
+import { TorrentStatsWindow } from "../components/TorrentStatsWindow";
+import type { CardDTO, EmbyStatsDTO, TorrentStatsDTO } from "../types";
 
 type OpenIframeWindow = {
   id: string;
@@ -43,7 +45,18 @@ type OpenEmbyWindow = {
   zIndex: number;
 };
 
-type OpenWindow = OpenIframeWindow | OpenSshWindow | OpenEmbyWindow;
+type OpenTorrentWindow = {
+  id: string;
+  cardId: string;
+  title: string;
+  icon?: string;
+  type: "torrent";
+  provider: "qbittorrent" | "transmission";
+  card: CardDTO;
+  zIndex: number;
+};
+
+type OpenWindow = OpenIframeWindow | OpenSshWindow | OpenEmbyWindow | OpenTorrentWindow;
 
 export function HomePage() {
   const groups = useCardStore((state) => state.groups);
@@ -63,6 +76,7 @@ export function HomePage() {
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
   const [maxZIndex, setMaxZIndex] = useState(1000);
   const [embyStatsByCardId, setEmbyStatsByCardId] = useState<Record<string, EmbyStatsDTO>>({});
+  const [torrentStatsByCardId, setTorrentStatsByCardId] = useState<Record<string, TorrentStatsDTO>>({});
 
   useEffect(() => {
     Promise.all([loadCards(), loadSystem()]).catch(() => {
@@ -119,6 +133,49 @@ export function HomePage() {
         return;
       }
       setEmbyStatsByCardId((previous) => ({ ...previous, ...next }));
+    };
+
+    refresh().catch(() => undefined);
+    const timer = window.setInterval(() => {
+      refresh().catch(() => undefined);
+    }, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [cardsWithRuntimeMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const torrentCards = cardsWithRuntimeMode.filter(
+      (card) => card.cardType === "qbittorrent" || card.cardType === "transmission"
+    );
+    if (!torrentCards.length) {
+      setTorrentStatsByCardId({});
+      return;
+    }
+
+    const refresh = async () => {
+      const next: Record<string, TorrentStatsDTO> = {};
+      await Promise.all(
+        torrentCards.map(async (card) => {
+          try {
+            if (card.cardType === "qbittorrent") {
+              next[card.id] = await loadQbittorrentStats(card);
+            } else if (card.cardType === "transmission") {
+              next[card.id] = await loadTransmissionStats(card);
+            }
+          } catch {
+            // keep previous snapshot when refresh fails
+          }
+        })
+      );
+
+      if (cancelled) {
+        return;
+      }
+      setTorrentStatsByCardId((previous) => ({ ...previous, ...next }));
     };
 
     refresh().catch(() => undefined);
@@ -206,6 +263,28 @@ export function HomePage() {
       return;
     }
 
+    if (card.cardType === "qbittorrent" || card.cardType === "transmission") {
+      const existingTorrent = openWindows.find((window) => window.cardId === card.id);
+      if (existingTorrent) {
+        focusWindow(existingTorrent.id);
+        return;
+      }
+
+      const nextTorrent: OpenTorrentWindow = {
+        id: `window-${card.id}-${Date.now()}`,
+        cardId: card.id,
+        title: card.name,
+        icon: card.icon,
+        type: "torrent",
+        provider: card.cardType,
+        card,
+        zIndex: maxZIndex + 1
+      };
+      setOpenWindows((previous) => [...previous, nextTorrent]);
+      setMaxZIndex((value) => value + 1);
+      return;
+    }
+
     const health = healthByCardId[card.id];
     if (card.openMode === "newtab" || (card.openMode === "auto" && health?.status === "down")) {
       window.open(card.url, "_blank", "noopener,noreferrer");
@@ -249,6 +328,7 @@ export function HomePage() {
                     service={service}
                     health={healthByCardId[service.id]}
                     embyMediaTotal={embyStatsByCardId[service.id]?.mediaTotal}
+                    torrentStats={torrentStatsByCardId[service.id]}
                     draggable
                     onDragStart={() => setDraggingCardId(service.id)}
                     onDrop={() => {
@@ -307,6 +387,28 @@ export function HomePage() {
               zIndex={window.zIndex}
               onStatsUpdate={(stats) =>
                 setEmbyStatsByCardId((previous) => ({
+                  ...previous,
+                  [window.cardId]: stats
+                }))
+              }
+              onClose={() => setOpenWindows((previous) => previous.filter((item) => item.id !== window.id))}
+              onFocus={() => focusWindow(window.id)}
+            />
+          );
+        }
+        if (window.type === "torrent") {
+          return (
+            <TorrentStatsWindow
+              key={window.id}
+              id={window.id}
+              title={window.title}
+              icon={window.icon}
+              provider={window.provider}
+              card={window.card}
+              initialStats={torrentStatsByCardId[window.cardId]}
+              zIndex={window.zIndex}
+              onStatsUpdate={(stats) =>
+                setTorrentStatsByCardId((previous) => ({
                   ...previous,
                   [window.cardId]: stats
                 }))

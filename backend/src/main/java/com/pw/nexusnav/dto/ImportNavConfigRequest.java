@@ -68,6 +68,10 @@ public class ImportNavConfigRequest {
         private String sshUsername;
         private String sshAuthMode;
         private String embyApiKey;
+        private String qbittorrentUsername;
+        private String qbittorrentPassword;
+        private String transmissionUsername;
+        private String transmissionPassword;
         private String icon;
         private String description;
         private int orderIndex;
@@ -176,6 +180,38 @@ public class ImportNavConfigRequest {
 
         public void setEmbyApiKey(String embyApiKey) {
             this.embyApiKey = embyApiKey;
+        }
+
+        public String getQbittorrentUsername() {
+            return qbittorrentUsername;
+        }
+
+        public void setQbittorrentUsername(String qbittorrentUsername) {
+            this.qbittorrentUsername = qbittorrentUsername;
+        }
+
+        public String getQbittorrentPassword() {
+            return qbittorrentPassword;
+        }
+
+        public void setQbittorrentPassword(String qbittorrentPassword) {
+            this.qbittorrentPassword = qbittorrentPassword;
+        }
+
+        public String getTransmissionUsername() {
+            return transmissionUsername;
+        }
+
+        public void setTransmissionUsername(String transmissionUsername) {
+            this.transmissionUsername = transmissionUsername;
+        }
+
+        public String getTransmissionPassword() {
+            return transmissionPassword;
+        }
+
+        public void setTransmissionPassword(String transmissionPassword) {
+            this.transmissionPassword = transmissionPassword;
         }
 
         public String getIcon() {

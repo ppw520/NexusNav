@@ -49,6 +49,10 @@ public class NavConfigService {
             item.setSshUsername(trimToNull(source.getSshUsername()));
             item.setSshAuthMode(trimToNull(source.getSshAuthMode()));
             item.setEmbyApiKey(trimToNull(source.getEmbyApiKey()));
+            item.setQbittorrentUsername(trimToNull(source.getQbittorrentUsername()));
+            item.setQbittorrentPassword(trimToNull(source.getQbittorrentPassword()));
+            item.setTransmissionUsername(trimToNull(source.getTransmissionUsername()));
+            item.setTransmissionPassword(trimToNull(source.getTransmissionPassword()));
             item.setIcon(trimToNull(source.getIcon()));
             item.setDescription(trimToNull(source.getDescription()));
             item.setOrderIndex(source.getOrderIndex());

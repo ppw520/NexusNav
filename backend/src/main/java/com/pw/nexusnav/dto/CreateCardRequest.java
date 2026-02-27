@@ -30,7 +30,7 @@ public class CreateCardRequest {
     @Pattern(regexp = "^(iframe|newtab|auto)$")
     private String openMode;
 
-    @Pattern(regexp = "^(generic|ssh|emby)$")
+    @Pattern(regexp = "^(generic|ssh|emby|qbittorrent|transmission)$")
     private String cardType;
 
     @Size(max = 255)
@@ -46,6 +46,18 @@ public class CreateCardRequest {
 
     @Size(max = 512)
     private String embyApiKey;
+
+    @Size(max = 128)
+    private String qbittorrentUsername;
+
+    @Size(max = 512)
+    private String qbittorrentPassword;
+
+    @Size(max = 128)
+    private String transmissionUsername;
+
+    @Size(max = 512)
+    private String transmissionPassword;
 
     @Size(max = 128)
     private String icon;
@@ -160,6 +172,38 @@ public class CreateCardRequest {
 
     public void setEmbyApiKey(String embyApiKey) {
         this.embyApiKey = embyApiKey;
+    }
+
+    public String getQbittorrentUsername() {
+        return qbittorrentUsername;
+    }
+
+    public void setQbittorrentUsername(String qbittorrentUsername) {
+        this.qbittorrentUsername = qbittorrentUsername;
+    }
+
+    public String getQbittorrentPassword() {
+        return qbittorrentPassword;
+    }
+
+    public void setQbittorrentPassword(String qbittorrentPassword) {
+        this.qbittorrentPassword = qbittorrentPassword;
+    }
+
+    public String getTransmissionUsername() {
+        return transmissionUsername;
+    }
+
+    public void setTransmissionUsername(String transmissionUsername) {
+        this.transmissionUsername = transmissionUsername;
+    }
+
+    public String getTransmissionPassword() {
+        return transmissionPassword;
+    }
+
+    public void setTransmissionPassword(String transmissionPassword) {
+        this.transmissionPassword = transmissionPassword;
     }
 
     public String getIcon() {

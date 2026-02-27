@@ -163,6 +163,16 @@ Deploy with production compose:
 IMAGE_TAG=1.0.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
+## Downloader Cards (qBittorrent / Transmission)
+
+- New card types: `qbittorrent`, `transmission`.
+- Home page cards open a read-only stats window with:
+  - download/upload speed
+  - active/total torrent count
+  - status breakdown (`downloading`/`seeding`/`paused`/`queued`/`checking`/`stalled`/`error`/`unknown`)
+- Frontend strategy: direct API calls first, then automatic backend proxy fallback (`source: direct|proxy`).
+- These card types require at least one URL (`url`/`lanUrl`/`wanUrl`) and matching username/password.
+
 ## GitHub Flow Governance
 
 - Long-lived branch: `main` only.
@@ -215,6 +225,8 @@ Protected endpoints:
 - `POST /api/v1/cards/order`
 - `POST /api/v1/config/reload?prune=false`
 - `POST /api/v1/config/import-nav`
+- `GET /api/v1/qbittorrent/cards/{cardId}/stats`
+- `GET /api/v1/transmission/cards/{cardId}/stats`
 
 Response shape:
 
