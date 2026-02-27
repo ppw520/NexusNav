@@ -1,0 +1,11 @@
+# Default owners
+* @ppw520
+
+# Frontend
+/frontend/ @ppw520
+
+# Backend
+/backend/ @ppw520
+
+# CI/CD and repository governance
+/.github/ @ppw520
