@@ -67,6 +67,7 @@ public class ImportNavConfigRequest {
         private Integer sshPort;
         private String sshUsername;
         private String sshAuthMode;
+        private String embyApiKey;
         private String icon;
         private String description;
         private int orderIndex;
@@ -167,6 +168,14 @@ public class ImportNavConfigRequest {
 
         public void setSshAuthMode(String sshAuthMode) {
             this.sshAuthMode = sshAuthMode;
+        }
+
+        public String getEmbyApiKey() {
+            return embyApiKey;
+        }
+
+        public void setEmbyApiKey(String embyApiKey) {
+            this.embyApiKey = embyApiKey;
         }
 
         public String getIcon() {

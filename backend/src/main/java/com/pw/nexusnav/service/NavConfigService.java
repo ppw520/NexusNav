@@ -48,6 +48,7 @@ public class NavConfigService {
             item.setSshPort(source.getSshPort());
             item.setSshUsername(trimToNull(source.getSshUsername()));
             item.setSshAuthMode(trimToNull(source.getSshAuthMode()));
+            item.setEmbyApiKey(trimToNull(source.getEmbyApiKey()));
             item.setIcon(trimToNull(source.getIcon()));
             item.setDescription(trimToNull(source.getDescription()));
             item.setOrderIndex(source.getOrderIndex());

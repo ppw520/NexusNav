@@ -50,6 +50,9 @@ public class CardEntity {
     @Column(name = "ssh_auth_mode", length = 32)
     private String sshAuthMode;
 
+    @Column(name = "emby_api_key", length = 512)
+    private String embyApiKey;
+
     @Column(length = 128)
     private String icon;
 
@@ -159,6 +162,14 @@ public class CardEntity {
 
     public void setSshAuthMode(String sshAuthMode) {
         this.sshAuthMode = sshAuthMode;
+    }
+
+    public String getEmbyApiKey() {
+        return embyApiKey;
+    }
+
+    public void setEmbyApiKey(String embyApiKey) {
+        this.embyApiKey = embyApiKey;
     }
 
     public String getIcon() {

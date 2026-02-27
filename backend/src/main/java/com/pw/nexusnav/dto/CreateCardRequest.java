@@ -30,7 +30,7 @@ public class CreateCardRequest {
     @Pattern(regexp = "^(iframe|newtab|auto)$")
     private String openMode;
 
-    @Pattern(regexp = "^(generic|ssh)$")
+    @Pattern(regexp = "^(generic|ssh|emby)$")
     private String cardType;
 
     @Size(max = 255)
@@ -43,6 +43,9 @@ public class CreateCardRequest {
 
     @Pattern(regexp = "^(password|privatekey)$")
     private String sshAuthMode;
+
+    @Size(max = 512)
+    private String embyApiKey;
 
     @Size(max = 128)
     private String icon;
@@ -149,6 +152,14 @@ public class CreateCardRequest {
 
     public void setSshAuthMode(String sshAuthMode) {
         this.sshAuthMode = sshAuthMode;
+    }
+
+    public String getEmbyApiKey() {
+        return embyApiKey;
+    }
+
+    public void setEmbyApiKey(String embyApiKey) {
+        this.embyApiKey = embyApiKey;
     }
 
     public String getIcon() {

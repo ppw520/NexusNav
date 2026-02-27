@@ -7,6 +7,9 @@ import type {
   CardDTO,
   CardOrderItemDTO,
   CardPayload,
+  EmbyStatsDTO,
+  EmbyTaskDTO,
+  EmbyTaskRunResultDTO,
   GroupDTO,
   GroupPayload,
   NavConfigImportPayload,
@@ -128,6 +131,23 @@ export async function importNavConfig(payload: NavConfigImportPayload) {
   const { data } = await api.post<ApiResponse<{ groups: number; cards: number; message: string }>>(
     "/v1/config/import-nav",
     payload
+  );
+  return data.data;
+}
+
+export async function fetchEmbyStatsViaProxy(cardId: string): Promise<EmbyStatsDTO> {
+  const { data } = await api.get<ApiResponse<EmbyStatsDTO>>(`/v1/emby/cards/${encodeURIComponent(cardId)}/stats`);
+  return data.data;
+}
+
+export async function fetchEmbyTasksViaProxy(cardId: string): Promise<EmbyTaskDTO[]> {
+  const { data } = await api.get<ApiResponse<EmbyTaskDTO[]>>(`/v1/emby/cards/${encodeURIComponent(cardId)}/tasks`);
+  return data.data;
+}
+
+export async function runEmbyTaskViaProxy(cardId: string, taskId: string): Promise<EmbyTaskRunResultDTO> {
+  const { data } = await api.post<ApiResponse<EmbyTaskRunResultDTO>>(
+    `/v1/emby/cards/${encodeURIComponent(cardId)}/tasks/${encodeURIComponent(taskId)}/run`
   );
   return data.data;
 }

@@ -1,6 +1,6 @@
 # NexusNav MVP
 
-Language: [English](README.md) | [简体中文](README.zh-CN.md)
+Language: [简体中文](README.md) | [English](README.en.md)
 
 NexusNav 是一个面向 NAS/Homelab 服务的自托管控制台门户。
 
@@ -70,7 +70,7 @@ npm --prefix frontend run build
 
 ```bash
 export IMAGE=ghcr.io/ppw520/nexusnav
-export TAG=2026.02.25
+export TAG=1.0.0
 
 docker login
 docker buildx create --name nexusnav-builder --use --bootstrap || docker buildx use nexusnav-builder
@@ -84,15 +84,15 @@ docker buildx build \
 打发布标签：
 
 ```bash
-git tag -a v2026.02.25 -m "release 2026.02.25"
-git push origin v2026.02.25
+git tag -a v1.0.0 -m "release 1.0.0"
+git push origin v1.0.0
 ```
 
 验证已发布镜像：
 
 ```bash
-docker pull ghcr.io/ppw520/nexusnav:2026.02.25
-docker buildx imagetools inspect ghcr.io/ppw520/nexusnav:2026.02.25
+docker pull ghcr.io/ppw520/nexusnav:1.0.0
+docker buildx imagetools inspect ghcr.io/ppw520/nexusnav:1.0.0
 ```
 
 ## 生产发布（短停机）
@@ -103,7 +103,7 @@ docker buildx imagetools inspect ghcr.io/ppw520/nexusnav:2026.02.25
 ```yaml
 services:
   nexusnav:
-    image: ghcr.io/ppw520/nexusnav:2026.02.25
+    image: ghcr.io/ppw520/nexusnav:1.0.0
     container_name: nexusnav
     environment:
       SPRING_DATASOURCE_URL: jdbc:sqlite:/app/data/nexusnav.db
@@ -131,7 +131,7 @@ docker compose up -d --force-recreate
 
 ## 回滚
 
-将镜像标签切换为上一个稳定版本（例如 `ghcr.io/ppw520/nexusnav:2026.02.24`）并重新部署：
+将镜像标签切换为上一个稳定版本（例如 `ghcr.io/ppw520/nexusnav:0.9.2`）并重新部署：
 
 ```bash
 docker compose pull
@@ -153,7 +153,7 @@ docker compose up -d --force-recreate
 Tag 发布示例：
 
 ```bash
-git tag v1.0.0
+git tag -a v1.0.0 -m "release 1.0.0"
 git push origin v1.0.0
 ```
 
@@ -162,6 +162,34 @@ git push origin v1.0.0
 ```bash
 IMAGE_TAG=1.0.0 docker compose -f docker-compose.prod.yml up -d
 ```
+
+## GitHub Flow 分支治理
+
+- 长期分支：仅 `main`。
+- 开发分支命名：
+  - `feature/<短描述>`
+  - `fix/<短描述>`
+  - `chore/<短描述>`
+- 合并到 `main` 的 PR 必须满足：
+  - 至少 1 个 Approve
+  - `.github/workflows/ci.yml` 的全部检查通过
+  - 合并前分支已同步到最新 `main`
+- `main` 只允许 Squash 合并（禁用 merge commit 与 rebase merge）。
+- Hotfix 仍走 `fix/*` + PR 流程，不允许直接推送 `main`。
+- 发布触发：PR 合并到 `main` 后，由维护者打 `vMAJOR.MINOR.PATCH` 语义化标签。
+- 日期型标签仅作为历史遗留，后续版本统一使用 SemVer。
+
+### GitHub 仓库设置（手动配置）
+
+在 GitHub 仓库设置中对 `main` 启用以下规则：
+
+- 启用分支保护/Ruleset
+- 强制通过 Pull Request 合并
+- 最低审批人数：1
+- 强制状态检查通过后才可合并
+- 强制分支合并前与 `main` 保持最新
+- 禁止直接 push 到 `main`
+- 合并方式仅保留 Squash
 
 ## 核心 API
 

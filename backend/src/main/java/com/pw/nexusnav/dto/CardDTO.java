@@ -13,6 +13,7 @@ public record CardDTO(
         Integer sshPort,
         String sshUsername,
         String sshAuthMode,
+        String embyApiKey,
         String icon,
         String description,
         int orderIndex,

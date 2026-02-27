@@ -272,7 +272,9 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
             return ConfigModel.CARD_TYPE_GENERIC;
         }
         String normalized = cardType.trim().toLowerCase();
-        if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized) && !ConfigModel.CARD_TYPE_SSH.equals(normalized)) {
+        if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized)
+                && !ConfigModel.CARD_TYPE_SSH.equals(normalized)
+                && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)) {
             throw new IllegalArgumentException("Invalid cardType: " + cardType);
         }
         return normalized;

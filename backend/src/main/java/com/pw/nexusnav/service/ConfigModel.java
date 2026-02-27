@@ -10,6 +10,7 @@ public class ConfigModel {
     public static final String NETWORK_MODE_WAN = "wan";
     public static final String CARD_TYPE_GENERIC = "generic";
     public static final String CARD_TYPE_SSH = "ssh";
+    public static final String CARD_TYPE_EMBY = "emby";
     public static final String SSH_AUTH_PASSWORD = "password";
     public static final String SSH_AUTH_PRIVATE_KEY = "privatekey";
 
@@ -161,6 +162,7 @@ public class ConfigModel {
         private Integer sshPort;
         private String sshUsername;
         private String sshAuthMode = SSH_AUTH_PASSWORD;
+        private String embyApiKey;
         private String icon;
         private String description;
         private int orderIndex;
@@ -261,6 +263,14 @@ public class ConfigModel {
 
         public void setSshAuthMode(String sshAuthMode) {
             this.sshAuthMode = sshAuthMode;
+        }
+
+        public String getEmbyApiKey() {
+            return embyApiKey;
+        }
+
+        public void setEmbyApiKey(String embyApiKey) {
+            this.embyApiKey = embyApiKey;
         }
 
         public String getIcon() {

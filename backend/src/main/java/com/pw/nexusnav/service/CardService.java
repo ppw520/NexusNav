@@ -87,11 +87,19 @@ public class CardService {
                 item.setSshPort(normalizeSshPort(request.getSshPort()));
                 item.setSshUsername(emptyToNull(request.getSshUsername()));
                 item.setSshAuthMode(normalizeSshAuthMode(request.getSshAuthMode()));
+                item.setEmbyApiKey(null);
+            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
+                item.setSshHost(null);
+                item.setSshPort(null);
+                item.setSshUsername(null);
+                item.setSshAuthMode(null);
+                item.setEmbyApiKey(emptyToNull(request.getEmbyApiKey()));
             } else {
                 item.setSshHost(null);
                 item.setSshPort(null);
                 item.setSshUsername(null);
                 item.setSshAuthMode(null);
+                item.setEmbyApiKey(null);
             }
             item.setUrl(resolveCardUrl(
                     cardType,
@@ -106,7 +114,7 @@ public class CardService {
             item.setDescription(emptyToNull(request.getDescription()));
             item.setOrderIndex(request.getOrderIndex());
             item.setEnabled(request.isEnabled());
-            item.setHealthCheckEnabled(request.isHealthCheckEnabled());
+            item.setHealthCheckEnabled(isHealthCheckSupported(cardType) && request.isHealthCheckEnabled());
             ensureCardHasAddress(item);
             cards.add(item);
             createdId[0] = cardId;
@@ -142,11 +150,19 @@ public class CardService {
                 target.setSshPort(normalizeSshPort(request.getSshPort()));
                 target.setSshUsername(emptyToNull(request.getSshUsername()));
                 target.setSshAuthMode(normalizeSshAuthMode(request.getSshAuthMode()));
+                target.setEmbyApiKey(null);
+            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
+                target.setSshHost(null);
+                target.setSshPort(null);
+                target.setSshUsername(null);
+                target.setSshAuthMode(null);
+                target.setEmbyApiKey(emptyToNull(request.getEmbyApiKey()));
             } else {
                 target.setSshHost(null);
                 target.setSshPort(null);
                 target.setSshUsername(null);
                 target.setSshAuthMode(null);
+                target.setEmbyApiKey(null);
             }
             target.setUrl(resolveCardUrl(
                     cardType,
@@ -161,7 +177,7 @@ public class CardService {
             target.setDescription(emptyToNull(request.getDescription()));
             target.setOrderIndex(request.getOrderIndex());
             target.setEnabled(request.isEnabled());
-            target.setHealthCheckEnabled(request.isHealthCheckEnabled());
+            target.setHealthCheckEnabled(isHealthCheckSupported(cardType) && request.isHealthCheckEnabled());
             ensureCardHasAddress(target);
         });
 
@@ -224,11 +240,12 @@ public class CardService {
                 ConfigModel.CARD_TYPE_SSH.equals(cardType) ? normalizeSshPort(card.getSshPort()) : null,
                 ConfigModel.CARD_TYPE_SSH.equals(cardType) ? emptyToNull(card.getSshUsername()) : null,
                 ConfigModel.CARD_TYPE_SSH.equals(cardType) ? normalizeSshAuthMode(card.getSshAuthMode()) : null,
+                ConfigModel.CARD_TYPE_EMBY.equals(cardType) ? emptyToNull(card.getEmbyApiKey()) : null,
                 card.getIcon(),
                 card.getDescription(),
                 card.getOrderIndex(),
                 card.isEnabled(),
-                card.isHealthCheckEnabled()
+                isHealthCheckSupported(cardType) && card.isHealthCheckEnabled()
         );
     }
 
@@ -262,6 +279,15 @@ public class CardService {
             }
             if (!StringUtils.hasText(item.getSshUsername())) {
                 throw new IllegalArgumentException("SSH username is required");
+            }
+            return;
+        }
+        if (ConfigModel.CARD_TYPE_EMBY.equals(item.getCardType())) {
+            if (!StringUtils.hasText(firstNonBlank(item.getUrl(), item.getLanUrl(), item.getWanUrl()))) {
+                throw new IllegalArgumentException("Emby url is required");
+            }
+            if (!StringUtils.hasText(item.getEmbyApiKey())) {
+                throw new IllegalArgumentException("Emby API key is required");
             }
             return;
         }
@@ -311,7 +337,9 @@ public class CardService {
             return ConfigModel.CARD_TYPE_GENERIC;
         }
         String normalized = cardType.trim().toLowerCase(Locale.ROOT);
-        if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized) && !ConfigModel.CARD_TYPE_SSH.equals(normalized)) {
+        if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized)
+                && !ConfigModel.CARD_TYPE_SSH.equals(normalized)
+                && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)) {
             throw new IllegalArgumentException("Invalid cardType: " + cardType);
         }
         return normalized;
@@ -354,6 +382,10 @@ public class CardService {
             return null;
         }
         return firstNonBlank(url, lanUrl, wanUrl);
+    }
+
+    private boolean isHealthCheckSupported(String cardType) {
+        return ConfigModel.CARD_TYPE_GENERIC.equals(cardType);
     }
 
     private String firstNonBlank(String... values) {

@@ -11,7 +11,7 @@ export type GroupDTO = {
 };
 
 export type CardOpenMode = "iframe" | "newtab" | "auto";
-export type CardType = "generic" | "ssh";
+export type CardType = "generic" | "ssh" | "emby";
 export type SshAuthMode = "password" | "privatekey";
 
 export type CardDTO = {
@@ -27,11 +27,49 @@ export type CardDTO = {
   sshPort?: number;
   sshUsername?: string;
   sshAuthMode?: SshAuthMode;
+  embyApiKey?: string;
   icon?: string;
   description?: string;
   orderIndex: number;
   enabled: boolean;
   healthCheckEnabled: boolean;
+};
+
+export type EmbyDataSource = "direct" | "proxy";
+
+export type EmbyMediaBreakdownItemDTO = {
+  key: string;
+  count: number;
+};
+
+export type EmbyStatsDTO = {
+  mediaTotal: number;
+  mediaBreakdown?: EmbyMediaBreakdownItemDTO[];
+  onlineSessions: number;
+  playingSessions: number;
+  updatedAt: number;
+  source: EmbyDataSource;
+};
+
+export type EmbyTaskDTO = {
+  id: string;
+  name: string;
+  description?: string;
+  module?: string;
+  state: string;
+  isRunning: boolean;
+  lastRunAt?: string;
+  lastResult?: string;
+};
+
+export type EmbyTaskRunResultDTO = {
+  taskId: string;
+  taskName?: string;
+  triggered: boolean;
+  status: string;
+  message?: string;
+  updatedAt: number;
+  source: EmbyDataSource;
 };
 
 export type HealthStatusDTO = {
@@ -86,6 +124,7 @@ export type CardPayload = {
   sshPort?: number;
   sshUsername?: string;
   sshAuthMode?: SshAuthMode;
+  embyApiKey?: string;
   icon?: string;
   description?: string;
   orderIndex: number;
