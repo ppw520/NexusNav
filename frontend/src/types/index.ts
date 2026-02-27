@@ -11,7 +11,7 @@ export type GroupDTO = {
 };
 
 export type CardOpenMode = "iframe" | "newtab" | "auto";
-export type CardType = "generic" | "ssh" | "emby";
+export type CardType = "generic" | "ssh" | "emby" | "qbittorrent" | "transmission";
 export type SshAuthMode = "password" | "privatekey";
 
 export type CardDTO = {
@@ -28,11 +28,36 @@ export type CardDTO = {
   sshUsername?: string;
   sshAuthMode?: SshAuthMode;
   embyApiKey?: string;
+  qbittorrentUsername?: string;
+  qbittorrentPassword?: string;
+  transmissionUsername?: string;
+  transmissionPassword?: string;
   icon?: string;
   description?: string;
   orderIndex: number;
   enabled: boolean;
   healthCheckEnabled: boolean;
+};
+
+export type TorrentStatusBreakdown = {
+  downloading: number;
+  seeding: number;
+  paused: number;
+  queued: number;
+  checking: number;
+  stalled: number;
+  error: number;
+  unknown: number;
+};
+
+export type TorrentStatsDTO = {
+  downloadSpeed: number;
+  uploadSpeed: number;
+  activeCount: number;
+  totalCount: number;
+  statusBreakdown: TorrentStatusBreakdown;
+  updatedAt: number;
+  source: "direct" | "proxy";
 };
 
 export type EmbyDataSource = "direct" | "proxy";
@@ -125,6 +150,10 @@ export type CardPayload = {
   sshUsername?: string;
   sshAuthMode?: SshAuthMode;
   embyApiKey?: string;
+  qbittorrentUsername?: string;
+  qbittorrentPassword?: string;
+  transmissionUsername?: string;
+  transmissionPassword?: string;
   icon?: string;
   description?: string;
   orderIndex: number;

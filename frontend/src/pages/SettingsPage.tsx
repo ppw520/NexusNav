@@ -65,6 +65,10 @@ type CardForm = {
   sshUsername: string;
   sshAuthMode: SshAuthMode;
   embyApiKey: string;
+  qbittorrentUsername: string;
+  qbittorrentPassword: string;
+  transmissionUsername: string;
+  transmissionPassword: string;
   icon: string;
   description: string;
   openMode: CardOpenMode;
@@ -189,6 +193,10 @@ export function SettingsPage() {
     sshUsername: "",
     sshAuthMode: "password",
     embyApiKey: "",
+    qbittorrentUsername: "",
+    qbittorrentPassword: "",
+    transmissionUsername: "",
+    transmissionPassword: "",
     icon: "",
     description: "",
     openMode: "iframe",
@@ -284,6 +292,10 @@ export function SettingsPage() {
       sshUsername: "",
       sshAuthMode: "password",
       embyApiKey: "",
+      qbittorrentUsername: "",
+      qbittorrentPassword: "",
+      transmissionUsername: "",
+      transmissionPassword: "",
       icon: "",
       description: "",
       openMode: "iframe",
@@ -314,6 +326,10 @@ export function SettingsPage() {
       sshUsername: card.sshUsername || "",
       sshAuthMode: card.sshAuthMode || "password",
       embyApiKey: card.embyApiKey || "",
+      qbittorrentUsername: card.qbittorrentUsername || "",
+      qbittorrentPassword: card.qbittorrentPassword || "",
+      transmissionUsername: card.transmissionUsername || "",
+      transmissionPassword: card.transmissionPassword || "",
       icon: card.icon || "",
       description: card.description || "",
       openMode: card.openMode,
@@ -428,6 +444,7 @@ export function SettingsPage() {
 
   const submitCard = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const hasAnyUrl = Boolean(cardForm.url.trim() || cardForm.lanUrl.trim() || cardForm.wanUrl.trim());
     if (cardForm.cardType === "ssh" && (!cardForm.sshHost.trim() || !cardForm.sshUsername.trim())) {
       toast.error("SSH 卡片需要填写主机和用户名");
       return;
@@ -439,6 +456,26 @@ export function SettingsPage() {
       }
       if (!cardForm.url.trim() && !cardForm.lanUrl.trim() && !cardForm.wanUrl.trim()) {
         toast.error("Emby 卡片至少需要填写一个地址");
+        return;
+      }
+    }
+    if (cardForm.cardType === "qbittorrent") {
+      if (!hasAnyUrl) {
+        toast.error("qBittorrent 卡片至少需要填写一个地址");
+        return;
+      }
+      if (!cardForm.qbittorrentUsername.trim() || !cardForm.qbittorrentPassword.trim()) {
+        toast.error("qBittorrent 卡片需要填写用户名和密码");
+        return;
+      }
+    }
+    if (cardForm.cardType === "transmission") {
+      if (!hasAnyUrl) {
+        toast.error("Transmission 卡片至少需要填写一个地址");
+        return;
+      }
+      if (!cardForm.transmissionUsername.trim() || !cardForm.transmissionPassword.trim()) {
+        toast.error("Transmission 卡片需要填写用户名和密码");
         return;
       }
     }
@@ -462,6 +499,14 @@ export function SettingsPage() {
         sshUsername: cardForm.cardType === "ssh" ? cardForm.sshUsername || undefined : undefined,
         sshAuthMode: cardForm.cardType === "ssh" ? cardForm.sshAuthMode : undefined,
         embyApiKey: cardForm.cardType === "emby" ? cardForm.embyApiKey || undefined : undefined,
+        qbittorrentUsername:
+          cardForm.cardType === "qbittorrent" ? cardForm.qbittorrentUsername || undefined : undefined,
+        qbittorrentPassword:
+          cardForm.cardType === "qbittorrent" ? cardForm.qbittorrentPassword || undefined : undefined,
+        transmissionUsername:
+          cardForm.cardType === "transmission" ? cardForm.transmissionUsername || undefined : undefined,
+        transmissionPassword:
+          cardForm.cardType === "transmission" ? cardForm.transmissionPassword || undefined : undefined,
         icon: cardForm.icon || undefined,
         description: cardForm.description || undefined,
         openMode: cardForm.cardType === "generic" ? cardForm.openMode : "iframe",
@@ -589,6 +634,10 @@ export function SettingsPage() {
           sshUsername?: unknown;
           sshAuthMode?: unknown;
           embyApiKey?: unknown;
+          qbittorrentUsername?: unknown;
+          qbittorrentPassword?: unknown;
+          transmissionUsername?: unknown;
+          transmissionPassword?: unknown;
           icon?: unknown;
           description?: unknown;
           orderIndex?: unknown;
@@ -724,6 +773,16 @@ export function SettingsPage() {
                     {card.cardType === "emby" && (
                       <span className="rounded border border-sky-400/40 bg-sky-500/10 px-1.5 py-0.5 text-[10px] text-sky-300">
                         EMBY
+                      </span>
+                    )}
+                    {card.cardType === "qbittorrent" && (
+                      <span className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                        QBT
+                      </span>
+                    )}
+                    {card.cardType === "transmission" && (
+                      <span className="rounded border border-indigo-400/40 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] text-indigo-200">
+                        TR
                       </span>
                     )}
                     {card.cardType === "generic" && card.openMode === "newtab" && (
@@ -1176,6 +1235,8 @@ export function SettingsPage() {
               <option value="generic">通用</option>
               <option value="ssh">SSH 终端</option>
               <option value="emby">Emby 统计</option>
+              <option value="qbittorrent">qBittorrent 统计</option>
+              <option value="transmission">Transmission 统计</option>
             </select>
           </ModalField>
 
@@ -1218,6 +1279,50 @@ export function SettingsPage() {
                 required
               />
             </ModalField>
+          )}
+
+          {cardForm.cardType === "qbittorrent" && (
+            <>
+              <ModalField label="qBittorrent 用户名">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  value={cardForm.qbittorrentUsername}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, qbittorrentUsername: event.target.value }))}
+                  required
+                />
+              </ModalField>
+              <ModalField label="qBittorrent 密码">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  type="password"
+                  value={cardForm.qbittorrentPassword}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, qbittorrentPassword: event.target.value }))}
+                  required
+                />
+              </ModalField>
+            </>
+          )}
+
+          {cardForm.cardType === "transmission" && (
+            <>
+              <ModalField label="Transmission 用户名">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  value={cardForm.transmissionUsername}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, transmissionUsername: event.target.value }))}
+                  required
+                />
+              </ModalField>
+              <ModalField label="Transmission 密码">
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  type="password"
+                  value={cardForm.transmissionPassword}
+                  onChange={(event) => setCardForm((prev) => ({ ...prev, transmissionPassword: event.target.value }))}
+                  required
+                />
+              </ModalField>
+            </>
           )}
 
           {cardForm.cardType === "ssh" && (

@@ -88,18 +88,50 @@ public class CardService {
                 item.setSshUsername(emptyToNull(request.getSshUsername()));
                 item.setSshAuthMode(normalizeSshAuthMode(request.getSshAuthMode()));
                 item.setEmbyApiKey(null);
+                item.setQbittorrentUsername(null);
+                item.setQbittorrentPassword(null);
+                item.setTransmissionUsername(null);
+                item.setTransmissionPassword(null);
             } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
                 item.setSshHost(null);
                 item.setSshPort(null);
                 item.setSshUsername(null);
                 item.setSshAuthMode(null);
                 item.setEmbyApiKey(emptyToNull(request.getEmbyApiKey()));
+                item.setQbittorrentUsername(null);
+                item.setQbittorrentPassword(null);
+                item.setTransmissionUsername(null);
+                item.setTransmissionPassword(null);
+            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
+                item.setSshHost(null);
+                item.setSshPort(null);
+                item.setSshUsername(null);
+                item.setSshAuthMode(null);
+                item.setEmbyApiKey(null);
+                item.setQbittorrentUsername(emptyToNull(request.getQbittorrentUsername()));
+                item.setQbittorrentPassword(emptyToNull(request.getQbittorrentPassword()));
+                item.setTransmissionUsername(null);
+                item.setTransmissionPassword(null);
+            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
+                item.setSshHost(null);
+                item.setSshPort(null);
+                item.setSshUsername(null);
+                item.setSshAuthMode(null);
+                item.setEmbyApiKey(null);
+                item.setQbittorrentUsername(null);
+                item.setQbittorrentPassword(null);
+                item.setTransmissionUsername(emptyToNull(request.getTransmissionUsername()));
+                item.setTransmissionPassword(emptyToNull(request.getTransmissionPassword()));
             } else {
                 item.setSshHost(null);
                 item.setSshPort(null);
                 item.setSshUsername(null);
                 item.setSshAuthMode(null);
                 item.setEmbyApiKey(null);
+                item.setQbittorrentUsername(null);
+                item.setQbittorrentPassword(null);
+                item.setTransmissionUsername(null);
+                item.setTransmissionPassword(null);
             }
             item.setUrl(resolveCardUrl(
                     cardType,
@@ -151,18 +183,50 @@ public class CardService {
                 target.setSshUsername(emptyToNull(request.getSshUsername()));
                 target.setSshAuthMode(normalizeSshAuthMode(request.getSshAuthMode()));
                 target.setEmbyApiKey(null);
+                target.setQbittorrentUsername(null);
+                target.setQbittorrentPassword(null);
+                target.setTransmissionUsername(null);
+                target.setTransmissionPassword(null);
             } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
                 target.setSshHost(null);
                 target.setSshPort(null);
                 target.setSshUsername(null);
                 target.setSshAuthMode(null);
                 target.setEmbyApiKey(emptyToNull(request.getEmbyApiKey()));
+                target.setQbittorrentUsername(null);
+                target.setQbittorrentPassword(null);
+                target.setTransmissionUsername(null);
+                target.setTransmissionPassword(null);
+            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
+                target.setSshHost(null);
+                target.setSshPort(null);
+                target.setSshUsername(null);
+                target.setSshAuthMode(null);
+                target.setEmbyApiKey(null);
+                target.setQbittorrentUsername(emptyToNull(request.getQbittorrentUsername()));
+                target.setQbittorrentPassword(emptyToNull(request.getQbittorrentPassword()));
+                target.setTransmissionUsername(null);
+                target.setTransmissionPassword(null);
+            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
+                target.setSshHost(null);
+                target.setSshPort(null);
+                target.setSshUsername(null);
+                target.setSshAuthMode(null);
+                target.setEmbyApiKey(null);
+                target.setQbittorrentUsername(null);
+                target.setQbittorrentPassword(null);
+                target.setTransmissionUsername(emptyToNull(request.getTransmissionUsername()));
+                target.setTransmissionPassword(emptyToNull(request.getTransmissionPassword()));
             } else {
                 target.setSshHost(null);
                 target.setSshPort(null);
                 target.setSshUsername(null);
                 target.setSshAuthMode(null);
                 target.setEmbyApiKey(null);
+                target.setQbittorrentUsername(null);
+                target.setQbittorrentPassword(null);
+                target.setTransmissionUsername(null);
+                target.setTransmissionPassword(null);
             }
             target.setUrl(resolveCardUrl(
                     cardType,
@@ -241,6 +305,10 @@ public class CardService {
                 ConfigModel.CARD_TYPE_SSH.equals(cardType) ? emptyToNull(card.getSshUsername()) : null,
                 ConfigModel.CARD_TYPE_SSH.equals(cardType) ? normalizeSshAuthMode(card.getSshAuthMode()) : null,
                 ConfigModel.CARD_TYPE_EMBY.equals(cardType) ? emptyToNull(card.getEmbyApiKey()) : null,
+                ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType) ? emptyToNull(card.getQbittorrentUsername()) : null,
+                ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType) ? emptyToNull(card.getQbittorrentPassword()) : null,
+                ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType) ? emptyToNull(card.getTransmissionUsername()) : null,
+                ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType) ? emptyToNull(card.getTransmissionPassword()) : null,
                 card.getIcon(),
                 card.getDescription(),
                 card.getOrderIndex(),
@@ -288,6 +356,30 @@ public class CardService {
             }
             if (!StringUtils.hasText(item.getEmbyApiKey())) {
                 throw new IllegalArgumentException("Emby API key is required");
+            }
+            return;
+        }
+        if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(item.getCardType())) {
+            if (!StringUtils.hasText(firstNonBlank(item.getUrl(), item.getLanUrl(), item.getWanUrl()))) {
+                throw new IllegalArgumentException("qBittorrent url is required");
+            }
+            if (!StringUtils.hasText(item.getQbittorrentUsername())) {
+                throw new IllegalArgumentException("qBittorrent username is required");
+            }
+            if (!StringUtils.hasText(item.getQbittorrentPassword())) {
+                throw new IllegalArgumentException("qBittorrent password is required");
+            }
+            return;
+        }
+        if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(item.getCardType())) {
+            if (!StringUtils.hasText(firstNonBlank(item.getUrl(), item.getLanUrl(), item.getWanUrl()))) {
+                throw new IllegalArgumentException("Transmission url is required");
+            }
+            if (!StringUtils.hasText(item.getTransmissionUsername())) {
+                throw new IllegalArgumentException("Transmission username is required");
+            }
+            if (!StringUtils.hasText(item.getTransmissionPassword())) {
+                throw new IllegalArgumentException("Transmission password is required");
             }
             return;
         }
@@ -339,7 +431,9 @@ public class CardService {
         String normalized = cardType.trim().toLowerCase(Locale.ROOT);
         if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized)
                 && !ConfigModel.CARD_TYPE_SSH.equals(normalized)
-                && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)) {
+                && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)
+                && !ConfigModel.CARD_TYPE_QBITTORRENT.equals(normalized)
+                && !ConfigModel.CARD_TYPE_TRANSMISSION.equals(normalized)) {
             throw new IllegalArgumentException("Invalid cardType: " + cardType);
         }
         return normalized;

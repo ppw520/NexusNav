@@ -11,6 +11,8 @@ public class ConfigModel {
     public static final String CARD_TYPE_GENERIC = "generic";
     public static final String CARD_TYPE_SSH = "ssh";
     public static final String CARD_TYPE_EMBY = "emby";
+    public static final String CARD_TYPE_QBITTORRENT = "qbittorrent";
+    public static final String CARD_TYPE_TRANSMISSION = "transmission";
     public static final String SSH_AUTH_PASSWORD = "password";
     public static final String SSH_AUTH_PRIVATE_KEY = "privatekey";
 
@@ -163,6 +165,10 @@ public class ConfigModel {
         private String sshUsername;
         private String sshAuthMode = SSH_AUTH_PASSWORD;
         private String embyApiKey;
+        private String qbittorrentUsername;
+        private String qbittorrentPassword;
+        private String transmissionUsername;
+        private String transmissionPassword;
         private String icon;
         private String description;
         private int orderIndex;
@@ -271,6 +277,38 @@ public class ConfigModel {
 
         public void setEmbyApiKey(String embyApiKey) {
             this.embyApiKey = embyApiKey;
+        }
+
+        public String getQbittorrentUsername() {
+            return qbittorrentUsername;
+        }
+
+        public void setQbittorrentUsername(String qbittorrentUsername) {
+            this.qbittorrentUsername = qbittorrentUsername;
+        }
+
+        public String getQbittorrentPassword() {
+            return qbittorrentPassword;
+        }
+
+        public void setQbittorrentPassword(String qbittorrentPassword) {
+            this.qbittorrentPassword = qbittorrentPassword;
+        }
+
+        public String getTransmissionUsername() {
+            return transmissionUsername;
+        }
+
+        public void setTransmissionUsername(String transmissionUsername) {
+            this.transmissionUsername = transmissionUsername;
+        }
+
+        public String getTransmissionPassword() {
+            return transmissionPassword;
+        }
+
+        public void setTransmissionPassword(String transmissionPassword) {
+            this.transmissionPassword = transmissionPassword;
         }
 
         public String getIcon() {

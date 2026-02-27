@@ -163,6 +163,16 @@ git push origin v1.0.0
 IMAGE_TAG=1.0.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
+## 下载器卡片（qBittorrent / Transmission）
+
+- 新增卡片类型：`qbittorrent`、`transmission`。
+- 首页点击卡片可打开只读统计窗口，展示：
+  - 下载速率、上传速率
+  - 活跃任务数、总任务数
+  - 细分状态计数（`downloading`/`seeding`/`paused`/`queued`/`checking`/`stalled`/`error`/`unknown`）
+- 前端连接策略：优先直连下载器 API，失败自动回退后端代理（返回 `source: direct|proxy`）。
+- 这两类卡片要求至少一个地址（`url`/`lanUrl`/`wanUrl`）与对应账号密码。
+
 ## GitHub Flow 分支治理
 
 - 长期分支：仅 `main`。
@@ -215,6 +225,8 @@ IMAGE_TAG=1.0.0 docker compose -f docker-compose.prod.yml up -d
 - `POST /api/v1/cards/order`
 - `POST /api/v1/config/reload?prune=false`
 - `POST /api/v1/config/import-nav`
+- `GET /api/v1/qbittorrent/cards/{cardId}/stats`
+- `GET /api/v1/transmission/cards/{cardId}/stats`
 
 响应结构：
 

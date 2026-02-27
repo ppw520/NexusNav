@@ -265,18 +265,50 @@ public class ConfigImportService {
                 entity.setSshUsername(item.getSshUsername());
                 entity.setSshAuthMode(item.getSshAuthMode());
                 entity.setEmbyApiKey(null);
+                entity.setQbittorrentUsername(null);
+                entity.setQbittorrentPassword(null);
+                entity.setTransmissionUsername(null);
+                entity.setTransmissionPassword(null);
             } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
                 entity.setSshHost(null);
                 entity.setSshPort(null);
                 entity.setSshUsername(null);
                 entity.setSshAuthMode(null);
                 entity.setEmbyApiKey(item.getEmbyApiKey());
+                entity.setQbittorrentUsername(null);
+                entity.setQbittorrentPassword(null);
+                entity.setTransmissionUsername(null);
+                entity.setTransmissionPassword(null);
+            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
+                entity.setSshHost(null);
+                entity.setSshPort(null);
+                entity.setSshUsername(null);
+                entity.setSshAuthMode(null);
+                entity.setEmbyApiKey(null);
+                entity.setQbittorrentUsername(item.getQbittorrentUsername());
+                entity.setQbittorrentPassword(item.getQbittorrentPassword());
+                entity.setTransmissionUsername(null);
+                entity.setTransmissionPassword(null);
+            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
+                entity.setSshHost(null);
+                entity.setSshPort(null);
+                entity.setSshUsername(null);
+                entity.setSshAuthMode(null);
+                entity.setEmbyApiKey(null);
+                entity.setQbittorrentUsername(null);
+                entity.setQbittorrentPassword(null);
+                entity.setTransmissionUsername(item.getTransmissionUsername());
+                entity.setTransmissionPassword(item.getTransmissionPassword());
             } else {
                 entity.setSshHost(null);
                 entity.setSshPort(null);
                 entity.setSshUsername(null);
                 entity.setSshAuthMode(null);
                 entity.setEmbyApiKey(null);
+                entity.setQbittorrentUsername(null);
+                entity.setQbittorrentPassword(null);
+                entity.setTransmissionUsername(null);
+                entity.setTransmissionPassword(null);
             }
             entity.setIcon(item.getIcon());
             entity.setDescription(item.getDescription());
@@ -317,18 +349,50 @@ public class ConfigImportService {
                 card.setSshUsername(emptyToNull(card.getSshUsername()));
                 card.setSshAuthMode(normalizeSshAuthMode(card.getSshAuthMode()));
                 card.setEmbyApiKey(null);
+                card.setQbittorrentUsername(null);
+                card.setQbittorrentPassword(null);
+                card.setTransmissionUsername(null);
+                card.setTransmissionPassword(null);
             } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
                 card.setSshHost(null);
                 card.setSshPort(null);
                 card.setSshUsername(null);
                 card.setSshAuthMode(null);
                 card.setEmbyApiKey(emptyToNull(card.getEmbyApiKey()));
+                card.setQbittorrentUsername(null);
+                card.setQbittorrentPassword(null);
+                card.setTransmissionUsername(null);
+                card.setTransmissionPassword(null);
+            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
+                card.setSshHost(null);
+                card.setSshPort(null);
+                card.setSshUsername(null);
+                card.setSshAuthMode(null);
+                card.setEmbyApiKey(null);
+                card.setQbittorrentUsername(emptyToNull(card.getQbittorrentUsername()));
+                card.setQbittorrentPassword(emptyToNull(card.getQbittorrentPassword()));
+                card.setTransmissionUsername(null);
+                card.setTransmissionPassword(null);
+            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
+                card.setSshHost(null);
+                card.setSshPort(null);
+                card.setSshUsername(null);
+                card.setSshAuthMode(null);
+                card.setEmbyApiKey(null);
+                card.setQbittorrentUsername(null);
+                card.setQbittorrentPassword(null);
+                card.setTransmissionUsername(emptyToNull(card.getTransmissionUsername()));
+                card.setTransmissionPassword(emptyToNull(card.getTransmissionPassword()));
             } else {
                 card.setSshHost(null);
                 card.setSshPort(null);
                 card.setSshUsername(null);
                 card.setSshAuthMode(null);
                 card.setEmbyApiKey(null);
+                card.setQbittorrentUsername(null);
+                card.setQbittorrentPassword(null);
+                card.setTransmissionUsername(null);
+                card.setTransmissionPassword(null);
             }
             String fallbackUrl = resolveCardUrl(
                     cardType,
@@ -431,6 +495,26 @@ public class ConfigImportService {
                 }
                 if (!StringUtils.hasText(card.getEmbyApiKey())) {
                     throw new IllegalStateException("Emby API key is required: " + card.getId());
+                }
+            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
+                if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
+                    throw new IllegalStateException("qBittorrent url is required: " + card.getId());
+                }
+                if (!StringUtils.hasText(card.getQbittorrentUsername())) {
+                    throw new IllegalStateException("qBittorrent username is required: " + card.getId());
+                }
+                if (!StringUtils.hasText(card.getQbittorrentPassword())) {
+                    throw new IllegalStateException("qBittorrent password is required: " + card.getId());
+                }
+            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
+                if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
+                    throw new IllegalStateException("Transmission url is required: " + card.getId());
+                }
+                if (!StringUtils.hasText(card.getTransmissionUsername())) {
+                    throw new IllegalStateException("Transmission username is required: " + card.getId());
+                }
+                if (!StringUtils.hasText(card.getTransmissionPassword())) {
+                    throw new IllegalStateException("Transmission password is required: " + card.getId());
                 }
             } else if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
                 throw new IllegalStateException("Card url is required: " + card.getId());
@@ -573,7 +657,9 @@ public class ConfigImportService {
         String normalized = cardType.trim().toLowerCase();
         if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized)
                 && !ConfigModel.CARD_TYPE_SSH.equals(normalized)
-                && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)) {
+                && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)
+                && !ConfigModel.CARD_TYPE_QBITTORRENT.equals(normalized)
+                && !ConfigModel.CARD_TYPE_TRANSMISSION.equals(normalized)) {
             throw new IllegalStateException("Invalid cardType: " + cardType);
         }
         return normalized;

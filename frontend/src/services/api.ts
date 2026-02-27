@@ -14,6 +14,7 @@ import type {
   GroupPayload,
   NavConfigImportPayload,
   SystemConfigDTO,
+  TorrentStatsDTO,
   VerifyConfigResponse
 } from "../types";
 
@@ -148,6 +149,20 @@ export async function fetchEmbyTasksViaProxy(cardId: string): Promise<EmbyTaskDT
 export async function runEmbyTaskViaProxy(cardId: string, taskId: string): Promise<EmbyTaskRunResultDTO> {
   const { data } = await api.post<ApiResponse<EmbyTaskRunResultDTO>>(
     `/v1/emby/cards/${encodeURIComponent(cardId)}/tasks/${encodeURIComponent(taskId)}/run`
+  );
+  return data.data;
+}
+
+export async function fetchQbittorrentStatsViaProxy(cardId: string): Promise<TorrentStatsDTO> {
+  const { data } = await api.get<ApiResponse<TorrentStatsDTO>>(
+    `/v1/qbittorrent/cards/${encodeURIComponent(cardId)}/stats`
+  );
+  return data.data;
+}
+
+export async function fetchTransmissionStatsViaProxy(cardId: string): Promise<TorrentStatsDTO> {
+  const { data } = await api.get<ApiResponse<TorrentStatsDTO>>(
+    `/v1/transmission/cards/${encodeURIComponent(cardId)}/stats`
   );
   return data.data;
 }
