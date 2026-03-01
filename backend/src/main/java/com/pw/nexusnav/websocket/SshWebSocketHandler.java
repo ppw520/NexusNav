@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jcraft.jsch.ChannelShell;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
+import com.pw.nexusnav.config.NexusNavProperties;
 import com.pw.nexusnav.entity.CardEntity;
 import com.pw.nexusnav.repository.CardRepository;
 import com.pw.nexusnav.service.ConfigModel;
@@ -35,12 +36,18 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
     private final CardRepository cardRepository;
+    private final NexusNavProperties properties;
     private final Map<String, SshRuntime> runtimes = new ConcurrentHashMap<>();
     private final ExecutorService outputExecutor = Executors.newCachedThreadPool();
 
-    public SshWebSocketHandler(ObjectMapper objectMapper, CardRepository cardRepository) {
+    public SshWebSocketHandler(
+            ObjectMapper objectMapper,
+            CardRepository cardRepository,
+            NexusNavProperties properties
+    ) {
         this.objectMapper = objectMapper;
         this.cardRepository = cardRepository;
+        this.properties = properties;
     }
 
     @Override
@@ -169,7 +176,8 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
                 sshSession.setPassword(password);
             }
             Properties config = new Properties();
-            config.put("StrictHostKeyChecking", "no");
+            boolean strictHostKeyChecking = properties.getSecurity().getSsh().isStrictHostKeyChecking();
+            config.put("StrictHostKeyChecking", strictHostKeyChecking ? "yes" : "no");
             sshSession.setConfig(config);
             sshSession.connect(CONNECT_TIMEOUT_MS);
 

@@ -18,6 +18,9 @@ const MEDIA_COUNT_KEYS = [
 ] as const;
 
 export async function loadEmbyStats(card: CardDTO): Promise<EmbyStatsDTO> {
+  if (!hasDirectEmbyCredentials(card)) {
+    return fetchEmbyStatsViaProxy(card.id);
+  }
   try {
     return await fetchEmbyStatsDirect(card);
   } catch {
@@ -26,6 +29,9 @@ export async function loadEmbyStats(card: CardDTO): Promise<EmbyStatsDTO> {
 }
 
 export async function loadEmbyTasks(card: CardDTO): Promise<EmbyTaskDTO[]> {
+  if (!hasDirectEmbyCredentials(card)) {
+    return fetchEmbyTasksViaProxy(card.id);
+  }
   try {
     return await fetchEmbyTasksDirect(card);
   } catch {
@@ -34,6 +40,9 @@ export async function loadEmbyTasks(card: CardDTO): Promise<EmbyTaskDTO[]> {
 }
 
 export async function triggerEmbyTask(card: CardDTO, taskId: string, taskName?: string): Promise<EmbyTaskRunResultDTO> {
+  if (!hasDirectEmbyCredentials(card)) {
+    return runEmbyTaskViaProxy(card.id, taskId);
+  }
   try {
     return await runEmbyTaskDirect(card, taskId, taskName);
   } catch {
@@ -413,6 +422,10 @@ function asBoolean(value: unknown): boolean {
     return value.toLowerCase() === "true";
   }
   return false;
+}
+
+function hasDirectEmbyCredentials(card: CardDTO): boolean {
+  return Boolean((card.embyApiKey || "").trim());
 }
 
 function taskModuleSortKey(module?: string) {

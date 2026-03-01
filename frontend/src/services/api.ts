@@ -23,6 +23,8 @@ const api = axios.create({
   withCredentials: true
 });
 
+const VERIFY_TOKEN_HEADER = "X-NexusNav-Verify-Token";
+
 let unauthorizedHandler: (() => void) | undefined;
 
 export function setUnauthorizedHandler(handler: (() => void) | undefined) {
@@ -69,8 +71,13 @@ export async function fetchAdminConfig(): Promise<AdminConfigDTO> {
   return data.data;
 }
 
-export async function updateAdminConfig(payload: AdminConfigUpdatePayload): Promise<AdminConfigDTO> {
-  const { data } = await api.post<ApiResponse<AdminConfigDTO>>("/v1/system/admin-config", payload);
+export async function updateAdminConfig(
+  payload: AdminConfigUpdatePayload,
+  verifyToken?: string
+): Promise<AdminConfigDTO> {
+  const { data } = await api.post<ApiResponse<AdminConfigDTO>>("/v1/system/admin-config", payload, {
+    headers: buildVerifyHeaders(verifyToken)
+  });
   return data.data;
 }
 
@@ -121,17 +128,19 @@ export async function saveCardOrder(items: CardOrderItemDTO[]) {
   return data.data;
 }
 
-export async function reloadConfig(prune = false) {
+export async function reloadConfig(prune = false, verifyToken?: string) {
   const { data } = await api.post<ApiResponse<Record<string, unknown>>>("/v1/config/reload", undefined, {
-    params: { prune }
+    params: { prune },
+    headers: buildVerifyHeaders(verifyToken)
   });
   return data.data;
 }
 
-export async function importNavConfig(payload: NavConfigImportPayload) {
+export async function importNavConfig(payload: NavConfigImportPayload, verifyToken?: string) {
   const { data } = await api.post<ApiResponse<{ groups: number; cards: number; message: string }>>(
     "/v1/config/import-nav",
-    payload
+    payload,
+    { headers: buildVerifyHeaders(verifyToken) }
   );
   return data.data;
 }
@@ -165,4 +174,11 @@ export async function fetchTransmissionStatsViaProxy(cardId: string): Promise<To
     `/v1/transmission/cards/${encodeURIComponent(cardId)}/stats`
   );
   return data.data;
+}
+
+function buildVerifyHeaders(verifyToken?: string): Record<string, string> | undefined {
+  if (!verifyToken || !verifyToken.trim()) {
+    return undefined;
+  }
+  return { [VERIFY_TOKEN_HEADER]: verifyToken.trim() };
 }

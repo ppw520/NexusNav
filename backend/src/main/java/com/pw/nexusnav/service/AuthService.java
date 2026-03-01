@@ -1,5 +1,6 @@
 package com.pw.nexusnav.service;
 
+import com.pw.nexusnav.exception.UnauthorizedException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseCookie;
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AuthService {
 
     public static final String SESSION_COOKIE = "NX_SESSION";
+    public static final String VERIFY_TOKEN_HEADER = "X-NexusNav-Verify-Token";
     private static final int DEFAULT_TIMEOUT_MINUTES = 480;
     private static final BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder();
 
@@ -114,5 +116,18 @@ public class AuthService {
         }
         Long expireAt = configVerifyTokens.remove(token);
         return expireAt != null && expireAt >= Instant.now().toEpochMilli();
+    }
+
+    public boolean isConfigVerifyRequired() {
+        return configImportService.getSystemConfig().getSecurity().isRequireAuthForConfig();
+    }
+
+    public void assertConfigMutationAuthorized(String verifyToken) {
+        if (!isConfigVerifyRequired()) {
+            return;
+        }
+        if (!consumeConfigVerifyToken(verifyToken)) {
+            throw new UnauthorizedException("Config verification required");
+        }
     }
 }

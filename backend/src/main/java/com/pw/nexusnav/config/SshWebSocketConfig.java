@@ -26,10 +26,16 @@ public class SshWebSocketConfig implements WebSocketConfigurer {
     private static final Logger log = LoggerFactory.getLogger(SshWebSocketConfig.class);
     private final SshWebSocketHandler sshWebSocketHandler;
     private final AuthService authService;
+    private final NexusNavProperties properties;
 
-    public SshWebSocketConfig(SshWebSocketHandler sshWebSocketHandler, AuthService authService) {
+    public SshWebSocketConfig(
+            SshWebSocketHandler sshWebSocketHandler,
+            AuthService authService,
+            NexusNavProperties properties
+    ) {
         this.sshWebSocketHandler = sshWebSocketHandler;
         this.authService = authService;
+        this.properties = properties;
     }
 
     @Override
@@ -78,6 +84,6 @@ public class SshWebSocketConfig implements WebSocketConfigurer {
                     ) {
                     }
                 })
-                .setAllowedOriginPatterns("*");
+                .setAllowedOriginPatterns(WebConfig.resolveAllowedOrigins(properties.getSecurity().getAllowedOrigins()));
     }
 }

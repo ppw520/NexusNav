@@ -17,6 +17,10 @@ type TransmissionConnectionContext = {
 };
 
 export async function loadQbittorrentStats(card: CardDTO): Promise<TorrentStatsDTO> {
+  if (!hasDirectQbCredentials(card)) {
+    const fallback = await fetchQbittorrentStatsViaProxy(card.id);
+    return { ...fallback, source: "proxy" };
+  }
   try {
     return await fetchQbittorrentStatsDirect(card);
   } catch {
@@ -26,6 +30,10 @@ export async function loadQbittorrentStats(card: CardDTO): Promise<TorrentStatsD
 }
 
 export async function loadTransmissionStats(card: CardDTO): Promise<TorrentStatsDTO> {
+  if (!hasDirectTransmissionCredentials(card)) {
+    const fallback = await fetchTransmissionStatsViaProxy(card.id);
+    return { ...fallback, source: "proxy" };
+  }
   try {
     return await fetchTransmissionStatsDirect(card);
   } catch {
@@ -446,4 +454,12 @@ function asNumber(value: unknown): number {
     return Number.isFinite(parsed) ? parsed : 0;
   }
   return 0;
+}
+
+function hasDirectQbCredentials(card: CardDTO): boolean {
+  return Boolean(asString(card.qbittorrentUsername) && asString(card.qbittorrentPassword));
+}
+
+function hasDirectTransmissionCredentials(card: CardDTO): boolean {
+  return Boolean(asString(card.transmissionUsername) && asString(card.transmissionPassword));
 }

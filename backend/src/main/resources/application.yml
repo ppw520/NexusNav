@@ -27,3 +27,8 @@ server:
 nexusnav:
   config-path: ${NEXUSNAV_CONFIG_PATH:}
   nav-path: ${NEXUSNAV_NAV_PATH:}
+  health-interval-seconds: ${NEXUSNAV_HEALTH_INTERVAL:30}
+  security:
+    allowed-origins: ${NEXUSNAV_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+    ssh:
+      strict-host-key-checking: ${NEXUSNAV_SSH_STRICT_HOST_KEY_CHECKING:true}

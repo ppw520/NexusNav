@@ -71,6 +71,14 @@ export function HomePage() {
   const config = useSystemStore((state) => state.config);
   const loadSystem = useSystemStore((state) => state.load);
   const runtimeNetworkMode = useSystemStore((state) => state.runtimeNetworkMode);
+  const refreshIntervalMs = useMemo(() => {
+    const seconds = Number(config?.healthProbeIntervalSeconds ?? 30);
+    if (!Number.isFinite(seconds)) {
+      return 30_000;
+    }
+    const normalized = Math.min(300, Math.max(10, Math.floor(seconds)));
+    return normalized * 1000;
+  }, [config?.healthProbeIntervalSeconds]);
 
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
@@ -102,12 +110,12 @@ export function HomePage() {
     probeCards(cardsWithRuntimeMode).catch(() => undefined);
     const timer = window.setInterval(() => {
       probeCards(cardsWithRuntimeMode).catch(() => undefined);
-    }, 30000);
+    }, refreshIntervalMs);
     return () => {
       window.clearInterval(timer);
       resetHealth();
     };
-  }, [cardsWithRuntimeMode, probeCards, resetHealth]);
+  }, [cardsWithRuntimeMode, probeCards, refreshIntervalMs, resetHealth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,13 +146,13 @@ export function HomePage() {
     refresh().catch(() => undefined);
     const timer = window.setInterval(() => {
       refresh().catch(() => undefined);
-    }, 30000);
+    }, refreshIntervalMs);
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [cardsWithRuntimeMode]);
+  }, [cardsWithRuntimeMode, refreshIntervalMs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,13 +189,13 @@ export function HomePage() {
     refresh().catch(() => undefined);
     const timer = window.setInterval(() => {
       refresh().catch(() => undefined);
-    }, 30000);
+    }, refreshIntervalMs);
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [cardsWithRuntimeMode]);
+  }, [cardsWithRuntimeMode, refreshIntervalMs]);
 
   const groupedCards = useMemo(() => {
     const grouped: Record<string, CardDTO[]> = {};

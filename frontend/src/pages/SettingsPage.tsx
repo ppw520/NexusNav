@@ -160,19 +160,21 @@ function FormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
-      <div className="relative w-full max-w-[512px] rounded-[10px] border border-white/15 bg-slate-950/95 shadow-xl backdrop-blur">
-        <button
-          type="button"
-          className="absolute right-3 top-3 rounded p-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
-          onClick={onClose}
-          aria-label="关闭"
-        >
-          <X className="h-4 w-4" />
-        </button>
-        <div className="px-6 pb-6 pt-5">
-          <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
-          <div className="mt-4">{children}</div>
+    <div className="fixed inset-0 z-[80] overflow-y-auto bg-black/50 p-4">
+      <div className="flex min-h-full items-start justify-center py-4 sm:items-center">
+        <div className="relative w-full max-w-[512px] max-h-[calc(100vh-2rem)] overflow-hidden rounded-[10px] border border-white/15 bg-slate-950/95 shadow-xl backdrop-blur">
+          <button
+            type="button"
+            className="absolute right-3 top-3 rounded p-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <div className="max-h-[calc(100vh-2rem)] overflow-y-auto px-6 pb-6 pt-5">
+            <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
+            <div className="mt-4">{children}</div>
+          </div>
         </div>
       </div>
     </div>

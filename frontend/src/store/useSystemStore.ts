@@ -11,7 +11,10 @@ type SystemStore = {
   runtimeNetworkMode: RuntimeNetworkMode;
   load: () => Promise<void>;
   loadAdminConfig: () => Promise<void>;
-  saveAdminConfig: (payload: AdminConfigDTO & { newAdminPassword?: string }) => Promise<void>;
+  saveAdminConfig: (
+    payload: AdminConfigDTO & { newAdminPassword?: string },
+    verifyToken?: string
+  ) => Promise<void>;
   setSearchEngine: (id: string) => void;
   setRuntimeNetworkMode: (mode: RuntimeNetworkMode) => void;
   cycleRuntimeNetworkMode: () => void;
@@ -40,18 +43,10 @@ export const useSystemStore = create<SystemStore>((set, get) => ({
     set({ adminConfig });
   },
 
-  saveAdminConfig: async (payload) => {
-    const adminConfig = await updateAdminConfig(payload);
+  saveAdminConfig: async (payload, verifyToken) => {
+    const adminConfig = await updateAdminConfig(payload, verifyToken);
     set({ adminConfig });
-    try {
-      await get().load();
-    } catch (error) {
-      const status = (error as { response?: { status?: number } })?.response?.status;
-      if (status === 401) {
-        return;
-      }
-      throw error;
-    }
+    await get().load();
   },
 
   setSearchEngine: (id) => {

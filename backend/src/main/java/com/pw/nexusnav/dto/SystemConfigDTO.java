@@ -11,7 +11,8 @@ public record SystemConfigDTO(
         boolean requireAuthForConfig,
         boolean dailySentenceEnabled,
         String backgroundType,
-        String backgroundImageDataUrl
+        String backgroundImageDataUrl,
+        int healthProbeIntervalSeconds
 ) {
     public record SearchEngineDTO(String id, String name, String searchUrlTemplate, String icon) {
     }

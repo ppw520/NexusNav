@@ -32,6 +32,9 @@ export type CardDTO = {
   qbittorrentPassword?: string;
   transmissionUsername?: string;
   transmissionPassword?: string;
+  hasEmbyApiKey?: boolean;
+  hasQbittorrentPassword?: boolean;
+  hasTransmissionPassword?: boolean;
   icon?: string;
   description?: string;
   orderIndex: number;
@@ -122,6 +125,7 @@ export type SystemConfigDTO = {
   dailySentenceEnabled: boolean;
   backgroundType: "gradient" | "image";
   backgroundImageDataUrl?: string;
+  healthProbeIntervalSeconds: number;
 };
 
 export type AuthSessionDTO = {

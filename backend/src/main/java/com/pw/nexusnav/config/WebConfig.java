@@ -5,24 +5,29 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
+import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.List;
+
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
     private final AuthService authService;
+    private final NexusNavProperties properties;
 
-    public WebConfig(AuthService authService) {
+    public WebConfig(AuthService authService, NexusNavProperties properties) {
         this.authService = authService;
+        this.properties = properties;
     }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOriginPatterns("*")
+                .allowedOriginPatterns(resolveAllowedOrigins(properties.getSecurity().getAllowedOrigins()))
                 .allowedMethods("GET", "POST", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
@@ -66,5 +71,19 @@ public class WebConfig implements WebMvcConfigurer {
             response.getWriter().write("{\"code\":401,\"message\":\"Unauthorized\",\"data\":null}");
             return false;
         }
+    }
+
+    static String[] resolveAllowedOrigins(List<String> configuredOrigins) {
+        List<String> sanitized = configuredOrigins == null
+                ? List.of()
+                : configuredOrigins.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .filter(origin -> !"*".equals(origin))
+                .toList();
+        if (sanitized.isEmpty()) {
+            return new String[]{"http://localhost:*", "http://127.0.0.1:*"};
+        }
+        return sanitized.toArray(String[]::new);
     }
 }

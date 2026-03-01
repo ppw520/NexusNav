@@ -1,5 +1,6 @@
 package com.pw.nexusnav.service;
 
+import com.pw.nexusnav.config.NexusNavProperties;
 import com.pw.nexusnav.config.IpUtils;
 import com.pw.nexusnav.dto.AdminConfigDTO;
 import com.pw.nexusnav.dto.AdminConfigUpdateRequest;
@@ -18,16 +19,21 @@ public class SystemConfigService {
     private static final BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder();
     private static final int MAX_BACKGROUND_IMAGE_BYTES = 512 * 1024;
     private static final int MAX_SEARCH_ICON_LENGTH = 2048;
+    private static final int MIN_HEALTH_PROBE_INTERVAL_SECONDS = 10;
+    private static final int MAX_HEALTH_PROBE_INTERVAL_SECONDS = 300;
 
     private final ConfigImportService configImportService;
     private final ConfigMutationService configMutationService;
+    private final NexusNavProperties properties;
 
     public SystemConfigService(
             ConfigImportService configImportService,
-            ConfigMutationService configMutationService
+            ConfigMutationService configMutationService,
+            NexusNavProperties properties
     ) {
         this.configImportService = configImportService;
         this.configMutationService = configMutationService;
+        this.properties = properties;
     }
 
     public SystemConfigDTO getConfigForIp(String clientIp) {
@@ -52,7 +58,8 @@ public class SystemConfigService {
                 model.getSecurity().isRequireAuthForConfig(),
                 model.isDailySentenceEnabled(),
                 model.getBackgroundType(),
-                model.getBackgroundImageDataUrl()
+                model.getBackgroundImageDataUrl(),
+                resolveHealthProbeIntervalSeconds()
         );
     }
 
@@ -214,5 +221,16 @@ public class SystemConfigService {
         if (decoded.length > MAX_BACKGROUND_IMAGE_BYTES) {
             throw new IllegalArgumentException("backgroundImageDataUrl exceeds 512KB");
         }
+    }
+
+    private int resolveHealthProbeIntervalSeconds() {
+        int configured = properties.getHealthIntervalSeconds();
+        if (configured < MIN_HEALTH_PROBE_INTERVAL_SECONDS) {
+            return MIN_HEALTH_PROBE_INTERVAL_SECONDS;
+        }
+        if (configured > MAX_HEALTH_PROBE_INTERVAL_SECONDS) {
+            return MAX_HEALTH_PROBE_INTERVAL_SECONDS;
+        }
+        return configured;
     }
 }

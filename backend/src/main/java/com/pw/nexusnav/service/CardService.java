@@ -192,7 +192,7 @@ public class CardService {
                 target.setSshPort(null);
                 target.setSshUsername(null);
                 target.setSshAuthMode(null);
-                target.setEmbyApiKey(emptyToNull(request.getEmbyApiKey()));
+                target.setEmbyApiKey(mergeSecretValue(request.getEmbyApiKey(), target.getEmbyApiKey()));
                 target.setQbittorrentUsername(null);
                 target.setQbittorrentPassword(null);
                 target.setTransmissionUsername(null);
@@ -204,7 +204,7 @@ public class CardService {
                 target.setSshAuthMode(null);
                 target.setEmbyApiKey(null);
                 target.setQbittorrentUsername(emptyToNull(request.getQbittorrentUsername()));
-                target.setQbittorrentPassword(emptyToNull(request.getQbittorrentPassword()));
+                target.setQbittorrentPassword(mergeSecretValue(request.getQbittorrentPassword(), target.getQbittorrentPassword()));
                 target.setTransmissionUsername(null);
                 target.setTransmissionPassword(null);
             } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
@@ -216,7 +216,7 @@ public class CardService {
                 target.setQbittorrentUsername(null);
                 target.setQbittorrentPassword(null);
                 target.setTransmissionUsername(emptyToNull(request.getTransmissionUsername()));
-                target.setTransmissionPassword(emptyToNull(request.getTransmissionPassword()));
+                target.setTransmissionPassword(mergeSecretValue(request.getTransmissionPassword(), target.getTransmissionPassword()));
             } else {
                 target.setSshHost(null);
                 target.setSshPort(null);
@@ -304,11 +304,11 @@ public class CardService {
                 ConfigModel.CARD_TYPE_SSH.equals(cardType) ? normalizeSshPort(card.getSshPort()) : null,
                 ConfigModel.CARD_TYPE_SSH.equals(cardType) ? emptyToNull(card.getSshUsername()) : null,
                 ConfigModel.CARD_TYPE_SSH.equals(cardType) ? normalizeSshAuthMode(card.getSshAuthMode()) : null,
-                ConfigModel.CARD_TYPE_EMBY.equals(cardType) ? emptyToNull(card.getEmbyApiKey()) : null,
                 ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType) ? emptyToNull(card.getQbittorrentUsername()) : null,
-                ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType) ? emptyToNull(card.getQbittorrentPassword()) : null,
                 ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType) ? emptyToNull(card.getTransmissionUsername()) : null,
-                ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType) ? emptyToNull(card.getTransmissionPassword()) : null,
+                ConfigModel.CARD_TYPE_EMBY.equals(cardType) && StringUtils.hasText(card.getEmbyApiKey()),
+                ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType) && StringUtils.hasText(card.getQbittorrentPassword()),
+                ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType) && StringUtils.hasText(card.getTransmissionPassword()),
                 card.getIcon(),
                 card.getDescription(),
                 card.getOrderIndex(),
@@ -493,5 +493,15 @@ public class CardService {
 
     private String emptyToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String mergeSecretValue(String incoming, String existing) {
+        if (incoming == null) {
+            return emptyToNull(existing);
+        }
+        if (incoming.isBlank()) {
+            return null;
+        }
+        return incoming.trim();
     }
 }
