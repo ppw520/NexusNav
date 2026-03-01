@@ -90,6 +90,9 @@ public class QbittorrentService {
         }
         String text = response.body() == null ? "" : response.body().trim();
         if (!text.equalsIgnoreCase("ok.") && !text.equalsIgnoreCase("ok")) {
+            if (StringUtils.hasText(text)) {
+                throw new IllegalStateException("qBittorrent authentication failed: " + truncate(text, 180));
+            }
             throw new IllegalStateException("qBittorrent authentication failed");
         }
     }
@@ -127,9 +130,13 @@ public class QbittorrentService {
     ) {
         String normalizedPath = path.startsWith("/") ? path : "/" + path;
         URI uri = URI.create(config.baseUrl() + normalizedPath);
+        URI baseUri = URI.create(config.baseUrl());
+        String origin = baseUri.getScheme() + "://" + baseUri.getAuthority();
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                 .timeout(REQUEST_TIMEOUT)
-                .header("Accept", "application/json");
+                .header("Accept", "application/json")
+                .header("Origin", origin)
+                .header("Referer", origin + "/");
 
         if (StringUtils.hasText(body)) {
             builder.header("Content-Type", contentType);
@@ -199,7 +206,10 @@ public class QbittorrentService {
 
     private String resolveErrorReason(int statusCode, String responseBody) {
         if (statusCode == 401 || statusCode == 403) {
-            return "qBittorrent authentication failed";
+            if (StringUtils.hasText(responseBody)) {
+                return "qBittorrent authentication failed (" + statusCode + "): " + truncate(responseBody.trim(), 180);
+            }
+            return "qBittorrent authentication failed (" + statusCode + ")";
         }
         if (statusCode == 404) {
             return "qBittorrent API endpoint not found";
