@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/transmission/cards/{cardId}")
+@RequestMapping("/api/v2/transmission/cards/{cardId}")
 public class TransmissionController {
 
     private final TransmissionService transmissionService;

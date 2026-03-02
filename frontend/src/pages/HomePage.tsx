@@ -10,6 +10,7 @@ import { useCardStore } from "../store/useCardStore";
 import { useHealthStore } from "../store/useHealthStore";
 import { useSystemStore } from "../store/useSystemStore";
 import { TorrentStatsWindow } from "../components/TorrentStatsWindow";
+import { resolveCardRenderer } from "../lib/cardRegistry";
 import type { CardDTO, EmbyStatsDTO, TorrentStatsDTO } from "../types";
 
 type OpenIframeWindow = {
@@ -57,6 +58,22 @@ type OpenTorrentWindow = {
 };
 
 type OpenWindow = OpenIframeWindow | OpenSshWindow | OpenEmbyWindow | OpenTorrentWindow;
+
+function asText(value: unknown) {
+  if (value == null) {
+    return undefined;
+  }
+  const text = String(value).trim();
+  return text || undefined;
+}
+
+function asPort(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 22;
+  }
+  return Math.min(65535, Math.max(1, Math.floor(parsed)));
+}
 
 export function HomePage() {
   const groups = useCardStore((state) => state.groups);
@@ -132,7 +149,7 @@ export function HomePage() {
           try {
             next[card.id] = await loadEmbyStats(card);
           } catch {
-            // keep previous snapshot when refresh fails
+            // ignore
           }
         })
       );
@@ -175,7 +192,7 @@ export function HomePage() {
               next[card.id] = await loadTransmissionStats(card);
             }
           } catch {
-            // keep previous snapshot when refresh fails
+            // ignore
           }
         })
       );
@@ -226,13 +243,14 @@ export function HomePage() {
   };
 
   const handleServiceCardClick = (card: CardDTO) => {
-    if (card.cardType === "emby") {
-      const existingEmby = openWindows.find((window) => window.cardId === card.id);
-      if (existingEmby) {
-        focusWindow(existingEmby.id);
-        return;
-      }
+    const renderer = resolveCardRenderer(card.cardType);
+    const existing = openWindows.find((window) => window.cardId === card.id);
+    if (existing) {
+      focusWindow(existing.id);
+      return;
+    }
 
+    if (renderer.openKind === "emby") {
       const nextEmby: OpenEmbyWindow = {
         id: `window-${card.id}-${Date.now()}`,
         cardId: card.id,
@@ -247,23 +265,17 @@ export function HomePage() {
       return;
     }
 
-    if (card.cardType === "ssh") {
-      const existingSsh = openWindows.find((window) => window.cardId === card.id);
-      if (existingSsh) {
-        focusWindow(existingSsh.id);
-        return;
-      }
-
+    if (renderer.openKind === "ssh") {
       const nextSsh: OpenSshWindow = {
         id: `window-${card.id}-${Date.now()}`,
         cardId: card.id,
         title: card.name,
         icon: card.icon,
         type: "ssh",
-        sshHost: card.sshHost,
-        sshPort: card.sshPort,
-        sshUsername: card.sshUsername,
-        sshAuthMode: card.sshAuthMode,
+        sshHost: asText(card.config.host),
+        sshPort: asPort(card.config.port),
+        sshUsername: asText(card.config.username),
+        sshAuthMode: asText(card.config.authMode) as "password" | "privatekey" | undefined,
         zIndex: maxZIndex + 1
       };
       setOpenWindows((previous) => [...previous, nextSsh]);
@@ -271,20 +283,14 @@ export function HomePage() {
       return;
     }
 
-    if (card.cardType === "qbittorrent" || card.cardType === "transmission") {
-      const existingTorrent = openWindows.find((window) => window.cardId === card.id);
-      if (existingTorrent) {
-        focusWindow(existingTorrent.id);
-        return;
-      }
-
+    if (renderer.openKind === "qbittorrent" || renderer.openKind === "transmission") {
       const nextTorrent: OpenTorrentWindow = {
         id: `window-${card.id}-${Date.now()}`,
         cardId: card.id,
         title: card.name,
         icon: card.icon,
         type: "torrent",
-        provider: card.cardType,
+        provider: renderer.openKind,
         card,
         zIndex: maxZIndex + 1
       };
@@ -294,14 +300,13 @@ export function HomePage() {
     }
 
     const health = healthByCardId[card.id];
-    if (card.openMode === "newtab" || (card.openMode === "auto" && health?.status === "down")) {
-      window.open(card.url, "_blank", "noopener,noreferrer");
+    const targetUrl = card.url || "";
+    if (!targetUrl) {
+      toast.error("该卡片未配置可访问地址");
       return;
     }
-
-    const existing = openWindows.find((window) => window.cardId === card.id);
-    if (existing) {
-      focusWindow(existing.id);
+    if (card.openMode === "newtab" || (card.openMode === "auto" && health?.status === "down")) {
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
       return;
     }
 
@@ -311,7 +316,7 @@ export function HomePage() {
       title: card.name,
       icon: card.icon,
       type: "iframe",
-      url: card.url,
+      url: targetUrl,
       zIndex: maxZIndex + 1
     };
     setOpenWindows((previous) => [...previous, next]);
@@ -343,7 +348,7 @@ export function HomePage() {
                       if (draggingCardId && draggingCardId !== service.id) {
                         reorder(draggingCardId, service.id)
                           .then(() => toast.success("卡片顺序已保存"))
-                          .catch(() => toast.error("保存顺序失败"));
+                          .catch(() => toast.error("保存卡片顺序失败"));
                       }
                       setDraggingCardId(null);
                     }}
@@ -357,9 +362,9 @@ export function HomePage() {
 
         {cardsWithRuntimeMode.length === 0 && (
           <div className="py-20 text-center">
-            <div className="mb-4 text-6xl">🔍</div>
-            <h3 className="mb-2 text-xl font-medium text-gray-300">没有找到匹配的服务</h3>
-            <p className="text-base text-gray-400">尝试使用不同的关键词搜索</p>
+            <div className="mb-4 text-6xl">📭</div>
+            <h3 className="mb-2 text-xl font-medium text-gray-300">暂无可展示卡片</h3>
+            <p className="text-base text-gray-400">请前往设置页面添加服务卡片</p>
           </div>
         )}
       </div>

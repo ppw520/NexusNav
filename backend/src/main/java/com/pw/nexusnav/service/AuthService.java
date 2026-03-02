@@ -127,7 +127,7 @@ public class AuthService {
             return;
         }
         if (!consumeConfigVerifyToken(verifyToken)) {
-            throw new UnauthorizedException("Config verification required");
+            throw new UnauthorizedException("缺少配置二次验证或验证已过期");
         }
     }
 }

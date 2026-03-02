@@ -17,12 +17,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Input } from "../components/ui/input";
 import { Tabs } from "../components/ui/tabs";
 import { Textarea } from "../components/ui/textarea";
-import { importNavConfig, verifyConfig } from "../services/api";
+import { fetchCardTypes, importNavConfig, verifyConfig } from "../services/api";
 import { useAuthStore } from "../store/useAuthStore";
 import { useCardStore } from "../store/useCardStore";
 import { useSystemStore } from "../store/useSystemStore";
 import { cn } from "../lib/utils";
-import type { AdminConfigDTO, CardOpenMode, CardType, NavConfigImportPayload, SshAuthMode } from "../types";
+import type {
+  AdminConfigDTO,
+  CardOpenMode,
+  CardPayload,
+  CardTypeSchema,
+  NavConfigImportPayload,
+  SearchEngineDTO
+} from "../types";
 
 const TAB_ITEMS = [
   { value: "services", label: "服务管理" },
@@ -56,25 +63,16 @@ type CardForm = {
   id?: string;
   groupId: string;
   name: string;
-  cardType: CardType;
-  url: string;
-  lanUrl: string;
-  wanUrl: string;
-  sshHost: string;
-  sshPort: string;
-  sshUsername: string;
-  sshAuthMode: SshAuthMode;
-  embyApiKey: string;
-  qbittorrentUsername: string;
-  qbittorrentPassword: string;
-  transmissionUsername: string;
-  transmissionPassword: string;
+  cardType: string;
   icon: string;
   description: string;
   openMode: CardOpenMode;
   orderIndex: string;
   enabled: boolean;
   healthCheckEnabled: boolean;
+  configValues: Record<string, string>;
+  secretValues: Record<string, string>;
+  secretState: Record<string, boolean>;
 };
 
 type GroupForm = {
@@ -100,11 +98,25 @@ function hasValidConfigVerifyToken() {
   return Boolean(token) && Number.isFinite(expiresAt) && Date.now() < expiresAt;
 }
 
+function getStoredVerifyToken() {
+  if (!hasValidConfigVerifyToken()) {
+    return undefined;
+  }
+  return window.localStorage.getItem(VERIFY_TOKEN_STORAGE_KEY) || undefined;
+}
+
+function toStringValue(value: unknown) {
+  if (value == null) {
+    return "";
+  }
+  return String(value);
+}
+
 function toDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("read file failed"));
+    reader.onerror = () => reject(new Error("读取文件失败"));
     reader.readAsDataURL(file);
   });
 }
@@ -114,7 +126,7 @@ async function compressIconToDataUrl(file: File): Promise<string> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const instance = new Image();
     instance.onload = () => resolve(instance);
-    instance.onerror = () => reject(new Error("load image failed"));
+    instance.onerror = () => reject(new Error("加载图片失败"));
     instance.src = baseDataUrl;
   });
   const canvas = document.createElement("canvas");
@@ -132,6 +144,39 @@ async function compressIconToDataUrl(file: File): Promise<string> {
   ctx.clearRect(0, 0, 32, 32);
   ctx.drawImage(image, x, y, width, height);
   return canvas.toDataURL("image/webp", 0.8);
+}
+
+function buildDefaultCardForm(cardTypes: CardTypeSchema[], groupId?: string): CardForm {
+  const schema = cardTypes[0];
+  const configValues: Record<string, string> = {};
+  const secretValues: Record<string, string> = {};
+
+  if (schema) {
+    schema.fields.forEach((field) => {
+      if (field.secret) {
+        secretValues[field.key] = "";
+      } else if (field.defaultValue != null) {
+        configValues[field.key] = toStringValue(field.defaultValue);
+      } else {
+        configValues[field.key] = "";
+      }
+    });
+  }
+
+  return {
+    groupId: groupId || "",
+    name: "",
+    cardType: schema?.type || "generic",
+    icon: "",
+    description: "",
+    openMode: schema?.defaultOpenMode || "iframe",
+    orderIndex: "0",
+    enabled: true,
+    healthCheckEnabled: schema?.healthCheckSupported ?? true,
+    configValues,
+    secretValues,
+    secretState: {}
+  };
 }
 
 function ModalField({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
@@ -167,7 +212,7 @@ function FormModal({
             type="button"
             className="absolute right-3 top-3 rounded p-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
             onClick={onClose}
-            aria-label="Close"
+            aria-label="关闭"
           >
             <X className="h-4 w-4" />
           </button>
@@ -183,29 +228,8 @@ function FormModal({
 
 export function SettingsPage() {
   const [activeTab, setActiveTab] = useState("services");
-  const [cardForm, setCardForm] = useState<CardForm>({
-    groupId: "",
-    name: "",
-    cardType: "generic",
-    url: "",
-    lanUrl: "",
-    wanUrl: "",
-    sshHost: "",
-    sshPort: "22",
-    sshUsername: "",
-    sshAuthMode: "password",
-    embyApiKey: "",
-    qbittorrentUsername: "",
-    qbittorrentPassword: "",
-    transmissionUsername: "",
-    transmissionPassword: "",
-    icon: "",
-    description: "",
-    openMode: "iframe",
-    orderIndex: "0",
-    enabled: true,
-    healthCheckEnabled: true
-  });
+  const [cardTypes, setCardTypes] = useState<CardTypeSchema[]>([]);
+  const [cardForm, setCardForm] = useState<CardForm>(() => buildDefaultCardForm([], ""));
   const [groupForm, setGroupForm] = useState<GroupForm>({ name: "", orderIndex: "0" });
   const [searchForm, setSearchForm] = useState<SearchForm>({ name: "", searchUrlTemplate: "", icon: "" });
   const [securityEnabledDraft, setSecurityEnabledDraft] = useState(false);
@@ -242,6 +266,14 @@ export function SettingsPage() {
 
   const sortedGroups = useMemo(() => [...groups].sort((a, b) => a.orderIndex - b.orderIndex), [groups]);
   const sortedCards = useMemo(() => [...cards].sort((a, b) => a.orderIndex - b.orderIndex), [cards]);
+  const currentSchema = useMemo(
+    () => cardTypes.find((item) => item.type === cardForm.cardType) || cardTypes[0],
+    [cardTypes, cardForm.cardType]
+  );
+  const cardTypeNameMap = useMemo(
+    () => Object.fromEntries(cardTypes.map((item) => [item.type, item.name])),
+    [cardTypes]
+  );
   const searchEngines = adminConfig?.searchEngines || [];
   const trimmedNewPassword = newPassword.trim();
   const passwordTooShort = trimmedNewPassword.length > 0 && trimmedNewPassword.length < 8;
@@ -257,9 +289,21 @@ export function SettingsPage() {
   }, [cards]);
 
   useEffect(() => {
-    Promise.all([loadCards(), loadAdminConfig()]).catch(() => {
-      toast.error("加载配置数据失败");
-    });
+    let cancelled = false;
+    Promise.all([fetchCardTypes(), loadCards(), loadAdminConfig()])
+      .then(([schemas]) => {
+        if (cancelled) {
+          return;
+        }
+        setCardTypes(schemas);
+        setCardForm((previous) => (previous.id ? previous : buildDefaultCardForm(schemas, previous.groupId)));
+      })
+      .catch(() => {
+        toast.error("加载配置数据失败");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [loadAdminConfig, loadCards]);
 
   useEffect(() => {
@@ -281,63 +325,49 @@ export function SettingsPage() {
     setVerifiedForConfig(!adminConfig.security.requireAuthForConfig || hasValidConfigVerifyToken());
   }, [adminConfig]);
 
-  const resetCardForm = (cardType: CardType = "generic") =>
-    setCardForm({
-      groupId: sortedGroups[0]?.id || "",
-      name: "",
-      cardType,
-      url: "",
-      lanUrl: "",
-      wanUrl: "",
-      sshHost: "",
-      sshPort: "22",
-      sshUsername: "",
-      sshAuthMode: "password",
-      embyApiKey: "",
-      qbittorrentUsername: "",
-      qbittorrentPassword: "",
-      transmissionUsername: "",
-      transmissionPassword: "",
-      icon: "",
-      description: "",
-      openMode: "iframe",
-      orderIndex: "0",
-      enabled: true,
-      healthCheckEnabled: cardType === "generic"
-    });
+  const resetCardForm = () => setCardForm(buildDefaultCardForm(cardTypes, sortedGroups[0]?.id));
 
   const resetGroupForm = () => setGroupForm({ name: "", orderIndex: "0" });
   const resetSearchForm = () => setSearchForm({ name: "", searchUrlTemplate: "", icon: "" });
 
-  const openCreateServiceModal = (cardType: CardType = "generic") => {
-    resetCardForm(cardType);
+  const openCreateServiceModal = () => {
+    resetCardForm();
     setServiceModalOpen(true);
   };
 
   const openEditServiceModal = (card: (typeof sortedCards)[number]) => {
+    const schema = cardTypes.find((item) => item.type === card.cardType);
+    const configValues: Record<string, string> = {};
+    const secretValues: Record<string, string> = {};
+
+    if (schema) {
+      schema.fields.forEach((field) => {
+        if (field.secret) {
+          secretValues[field.key] = "";
+        } else {
+          configValues[field.key] = toStringValue(card.config[field.key]);
+        }
+      });
+    } else {
+      Object.keys(card.config).forEach((key) => {
+        configValues[key] = toStringValue(card.config[key]);
+      });
+    }
+
     setCardForm({
       id: card.id,
       groupId: card.groupId,
       name: card.name,
-      cardType: card.cardType || "generic",
-      url: card.url || "",
-      lanUrl: card.lanUrl || "",
-      wanUrl: card.wanUrl || "",
-      sshHost: card.sshHost || "",
-      sshPort: String(card.sshPort || 22),
-      sshUsername: card.sshUsername || "",
-      sshAuthMode: card.sshAuthMode || "password",
-      embyApiKey: card.embyApiKey || "",
-      qbittorrentUsername: card.qbittorrentUsername || "",
-      qbittorrentPassword: card.qbittorrentPassword || "",
-      transmissionUsername: card.transmissionUsername || "",
-      transmissionPassword: card.transmissionPassword || "",
+      cardType: card.cardType,
       icon: card.icon || "",
       description: card.description || "",
       openMode: card.openMode,
       orderIndex: String(card.orderIndex),
       enabled: card.enabled,
-      healthCheckEnabled: card.healthCheckEnabled
+      healthCheckEnabled: card.healthCheckEnabled,
+      configValues,
+      secretValues,
+      secretState: card.secretState || {}
     });
     setServiceModalOpen(true);
   };
@@ -372,21 +402,27 @@ export function SettingsPage() {
     options?: { successMessage?: string; newAdminPassword?: string }
   ): Promise<boolean> => {
     if (!adminConfig) {
+      toast.error("系统配置未加载完成");
       return false;
     }
     setSaving(true);
     try {
+      const verifyToken = adminConfig.security.requireAuthForConfig ? getStoredVerifyToken() : undefined;
+      if (adminConfig.security.requireAuthForConfig && !verifyToken) {
+        toast.error("请先完成二次验证");
+        return false;
+      }
       const next = cloneAdminConfig(adminConfig);
       updater(next);
       await saveAdminConfig({
         ...next,
         newAdminPassword: options?.newAdminPassword || undefined
-      });
+      }, verifyToken);
       await checkSession().catch(() => undefined);
       toast.success(options?.successMessage || "保存成功");
       return true;
-    } catch {
-      toast.error("保存失败");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
       return false;
     } finally {
       setSaving(false);
@@ -446,81 +482,79 @@ export function SettingsPage() {
 
   const submitCard = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const hasAnyUrl = Boolean(cardForm.url.trim() || cardForm.lanUrl.trim() || cardForm.wanUrl.trim());
-    if (cardForm.cardType === "ssh" && (!cardForm.sshHost.trim() || !cardForm.sshUsername.trim())) {
-      toast.error("SSH 卡片需要填写主机和用户名");
+    if (!currentSchema) {
+      toast.error("卡片类型配置不存在");
       return;
     }
-    if (cardForm.cardType === "emby") {
-      if (!cardForm.embyApiKey.trim()) {
-        toast.error("Emby 卡片需要填写 API Key");
-        return;
+
+    for (const field of currentSchema.fields) {
+      if (!field.required) {
+        continue;
       }
-      if (!cardForm.url.trim() && !cardForm.lanUrl.trim() && !cardForm.wanUrl.trim()) {
-        toast.error("Emby 卡片至少需要填写一个地址");
-        return;
-      }
-    }
-    if (cardForm.cardType === "qbittorrent") {
-      if (!hasAnyUrl) {
-        toast.error("qBittorrent 卡片至少需要填写一个地址");
-        return;
-      }
-      if (!cardForm.qbittorrentUsername.trim() || !cardForm.qbittorrentPassword.trim()) {
-        toast.error("qBittorrent 卡片需要填写用户名和密码");
+      if (field.secret) {
+        const hasExisting = Boolean(cardForm.secretState[field.key]);
+        const hasInput = Boolean(cardForm.secretValues[field.key]?.trim());
+        if (!hasExisting && !hasInput) {
+          toast.error(`${field.label} 不能为空`);
+          return;
+        }
+      } else if (!cardForm.configValues[field.key]?.trim()) {
+        toast.error(`${field.label} 不能为空`);
         return;
       }
     }
-    if (cardForm.cardType === "transmission") {
-      if (!hasAnyUrl) {
-        toast.error("Transmission 卡片至少需要填写一个地址");
-        return;
-      }
-      if (!cardForm.transmissionUsername.trim() || !cardForm.transmissionPassword.trim()) {
-        toast.error("Transmission 卡片需要填写用户名和密码");
-        return;
-      }
-    }
+
     setSaving(true);
     try {
-      const normalizedOrderIndex = Number.isNaN(Number(cardForm.orderIndex))
-        ? 0
-        : Number(cardForm.orderIndex || 0);
-      const normalizedSshPort = Number.isNaN(Number(cardForm.sshPort))
-        ? 22
-        : Math.min(65535, Math.max(1, Number(cardForm.sshPort || 22)));
-      const payload = {
+      const config: Record<string, unknown> = {};
+      const secrets: Record<string, string> = {};
+
+      currentSchema.fields.forEach((field) => {
+        if (field.secret) {
+          const value = cardForm.secretValues[field.key];
+          if (value?.trim()) {
+            secrets[field.key] = value.trim();
+          }
+          return;
+        }
+
+        const rawValue = cardForm.configValues[field.key];
+        if (!rawValue?.trim()) {
+          return;
+        }
+
+        if (field.type === "number") {
+          const parsed = Number(rawValue);
+          config[field.key] = Number.isFinite(parsed) ? parsed : rawValue.trim();
+          return;
+        }
+        config[field.key] = rawValue.trim();
+      });
+
+      const payload: CardPayload = {
         groupId: cardForm.groupId,
-        name: cardForm.name,
+        name: cardForm.name.trim(),
         cardType: cardForm.cardType,
-        url: cardForm.cardType === "ssh" ? undefined : cardForm.url || undefined,
-        lanUrl: cardForm.cardType === "ssh" ? undefined : cardForm.lanUrl || undefined,
-        wanUrl: cardForm.cardType === "ssh" ? undefined : cardForm.wanUrl || undefined,
-        sshHost: cardForm.cardType === "ssh" ? cardForm.sshHost || undefined : undefined,
-        sshPort: cardForm.cardType === "ssh" ? normalizedSshPort : undefined,
-        sshUsername: cardForm.cardType === "ssh" ? cardForm.sshUsername || undefined : undefined,
-        sshAuthMode: cardForm.cardType === "ssh" ? cardForm.sshAuthMode : undefined,
-        embyApiKey: cardForm.cardType === "emby" ? cardForm.embyApiKey || undefined : undefined,
-        qbittorrentUsername:
-          cardForm.cardType === "qbittorrent" ? cardForm.qbittorrentUsername || undefined : undefined,
-        qbittorrentPassword:
-          cardForm.cardType === "qbittorrent" ? cardForm.qbittorrentPassword || undefined : undefined,
-        transmissionUsername:
-          cardForm.cardType === "transmission" ? cardForm.transmissionUsername || undefined : undefined,
-        transmissionPassword:
-          cardForm.cardType === "transmission" ? cardForm.transmissionPassword || undefined : undefined,
-        icon: cardForm.icon || undefined,
-        description: cardForm.description || undefined,
-        openMode: cardForm.cardType === "generic" ? cardForm.openMode : "iframe",
-        orderIndex: normalizedOrderIndex,
+        icon: cardForm.icon.trim() || undefined,
+        description: cardForm.description.trim() || undefined,
+        openMode: cardForm.openMode,
+        orderIndex: Number(cardForm.orderIndex || 0),
         enabled: cardForm.enabled,
-        healthCheckEnabled: cardForm.cardType === "generic" ? cardForm.healthCheckEnabled : false
+        healthCheckEnabled: currentSchema.healthCheckSupported ? cardForm.healthCheckEnabled : false,
+        config,
+        secrets
       };
+
+      if (!payload.name) {
+        toast.error("卡片名称不能为空");
+        return;
+      }
+
       if (cardForm.id) {
         await updateCard(cardForm.id, payload);
         toast.success("服务更新成功");
       } else {
-        await createCard({ ...payload, id: undefined });
+        await createCard(payload);
         toast.success("服务创建成功");
       }
       resetCardForm();
@@ -651,7 +685,7 @@ export function SettingsPage() {
       const hasNavPayload = Array.isArray(payload.groups) && Array.isArray(payload.cards);
       if (!hasNavPayload) {
         if (!adminConfig) {
-          throw new Error("admin config not ready");
+          throw new Error("系统配置尚未加载完成");
         }
         const imported = parsed as Partial<AdminConfigDTO>;
         const merged: AdminConfigDTO = {
@@ -713,7 +747,7 @@ export function SettingsPage() {
                 <Button
                   variant="default"
                   className="h-9 rounded-lg border border-sky-400/20 bg-sky-500/85 px-4 text-slate-950 hover:bg-sky-400"
-                  onClick={() => openCreateServiceModal("generic")}
+                  onClick={openCreateServiceModal}
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   添加服务
@@ -766,28 +800,11 @@ export function SettingsPage() {
                   </div>
 
                   <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
-                    <span className="mr-2 truncate">{card.url}</span>
-                    {card.cardType === "ssh" && (
-                      <span className="rounded border border-emerald-400/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
-                        SSH
-                      </span>
-                    )}
-                    {card.cardType === "emby" && (
-                      <span className="rounded border border-sky-400/40 bg-sky-500/10 px-1.5 py-0.5 text-[10px] text-sky-300">
-                        EMBY
-                      </span>
-                    )}
-                    {card.cardType === "qbittorrent" && (
-                      <span className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">
-                        QBT
-                      </span>
-                    )}
-                    {card.cardType === "transmission" && (
-                      <span className="rounded border border-indigo-400/40 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] text-indigo-200">
-                        TR
-                      </span>
-                    )}
-                    {card.cardType === "generic" && card.openMode === "newtab" && (
+                    <span className="mr-2 truncate">{card.url || "-"}</span>
+                    <span className="rounded border border-white/25 bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-200">
+                      {cardTypeNameMap[card.cardType] || card.cardType}
+                    </span>
+                    {card.openMode === "newtab" && (
                       <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
                     )}
                   </div>
@@ -1225,152 +1242,117 @@ export function SettingsPage() {
               className={MODAL_SELECT_CLASS}
               value={cardForm.cardType}
               onChange={(event) => {
-                const nextType = event.target.value as CardType;
+                const schema = cardTypes.find((item) => item.type === event.target.value);
+                if (!schema) {
+                  return;
+                }
+                const configValues: Record<string, string> = {};
+                const secretValues: Record<string, string> = {};
+                schema.fields.forEach((field) => {
+                  if (field.secret) {
+                    secretValues[field.key] = "";
+                  } else if (field.defaultValue != null) {
+                    configValues[field.key] = toStringValue(field.defaultValue);
+                  } else {
+                    configValues[field.key] = "";
+                  }
+                });
                 setCardForm((prev) => ({
                   ...prev,
-                  cardType: nextType,
-                  openMode: "iframe",
-                  healthCheckEnabled: nextType === "generic" ? prev.healthCheckEnabled : false
+                  cardType: schema.type,
+                  openMode: schema.defaultOpenMode,
+                  healthCheckEnabled: schema.healthCheckSupported ? prev.healthCheckEnabled : false,
+                  configValues,
+                  secretValues,
+                  secretState: {}
                 }));
               }}
             >
-              <option value="generic">通用</option>
-              <option value="ssh">SSH 终端</option>
-              <option value="emby">Emby 统计</option>
-              <option value="qbittorrent">qBittorrent 统计</option>
-              <option value="transmission">Transmission 统计</option>
+              {cardTypes.map((schema) => (
+                <option key={schema.type} value={schema.type}>
+                  {schema.name}
+                </option>
+              ))}
             </select>
           </ModalField>
 
-          {cardForm.cardType !== "ssh" && (
-            <>
-              <ModalField label={cardForm.cardType === "emby" ? "默认地址（可选）" : "默认地址"}>
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  value={cardForm.url}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, url: event.target.value }))}
-                  required={cardForm.cardType === "generic"}
-                />
-              </ModalField>
-
-              <ModalField label="内网地址（可选）">
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  value={cardForm.lanUrl}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, lanUrl: event.target.value }))}
-                />
-              </ModalField>
-
-              <ModalField label="外网地址（可选）">
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  value={cardForm.wanUrl}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, wanUrl: event.target.value }))}
-                />
-              </ModalField>
-            </>
-          )}
-
-          {cardForm.cardType === "emby" && (
-            <ModalField label="Emby API Key">
-              <Input
-                className={MODAL_INPUT_CLASS}
-                type="password"
-                value={cardForm.embyApiKey}
-                onChange={(event) => setCardForm((prev) => ({ ...prev, embyApiKey: event.target.value }))}
-                required
-              />
-            </ModalField>
-          )}
-
-          {cardForm.cardType === "qbittorrent" && (
-            <>
-              <ModalField label="qBittorrent 用户名">
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  value={cardForm.qbittorrentUsername}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, qbittorrentUsername: event.target.value }))}
-                  required
-                />
-              </ModalField>
-              <ModalField label="qBittorrent 密码">
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  type="password"
-                  value={cardForm.qbittorrentPassword}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, qbittorrentPassword: event.target.value }))}
-                  required
-                />
-              </ModalField>
-            </>
-          )}
-
-          {cardForm.cardType === "transmission" && (
-            <>
-              <ModalField label="Transmission 用户名">
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  value={cardForm.transmissionUsername}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, transmissionUsername: event.target.value }))}
-                  required
-                />
-              </ModalField>
-              <ModalField label="Transmission 密码">
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  type="password"
-                  value={cardForm.transmissionPassword}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, transmissionPassword: event.target.value }))}
-                  required
-                />
-              </ModalField>
-            </>
-          )}
-
-          {cardForm.cardType === "ssh" && (
-            <>
-              <ModalField label="SSH 主机">
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  value={cardForm.sshHost}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, sshHost: event.target.value }))}
-                  placeholder="例如 192.168.1.10 或 server.example.com"
-                  required
-                />
-              </ModalField>
-
-              <ModalField label="SSH 端口">
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={cardForm.sshPort}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, sshPort: event.target.value }))}
-                />
-              </ModalField>
-
-              <ModalField label="SSH 用户名">
-                <Input
-                  className={MODAL_INPUT_CLASS}
-                  value={cardForm.sshUsername}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, sshUsername: event.target.value }))}
-                  required
-                />
-              </ModalField>
-
-              <ModalField label="认证方式" hint="密码/私钥在打开终端时输入，不会保存">
-                <select
-                  className={MODAL_SELECT_CLASS}
-                  value={cardForm.sshAuthMode}
-                  onChange={(event) => setCardForm((prev) => ({ ...prev, sshAuthMode: event.target.value as SshAuthMode }))}
+          {currentSchema?.fields.map((field) => {
+            if (field.secret) {
+              const hasSecret = Boolean(cardForm.secretState[field.key]);
+              return (
+                <ModalField
+                  key={field.key}
+                  label={field.label}
+                  hint={hasSecret ? "已保存密文，留空表示不修改" : field.placeholder}
                 >
-                  <option value="password">密码</option>
-                  <option value="privatekey">私钥</option>
-                </select>
+                  <Input
+                    className={MODAL_INPUT_CLASS}
+                    type="password"
+                    value={cardForm.secretValues[field.key] || ""}
+                    placeholder={hasSecret ? "已配置，留空不修改" : field.placeholder}
+                    onChange={(event) =>
+                      setCardForm((prev) => ({
+                        ...prev,
+                        secretValues: {
+                          ...prev.secretValues,
+                          [field.key]: event.target.value
+                        }
+                      }))
+                    }
+                  />
+                </ModalField>
+              );
+            }
+
+            if (field.type === "select") {
+              return (
+                <ModalField key={field.key} label={field.label} hint={field.placeholder}>
+                  <select
+                    className={MODAL_SELECT_CLASS}
+                    value={cardForm.configValues[field.key] || ""}
+                    onChange={(event) =>
+                      setCardForm((prev) => ({
+                        ...prev,
+                        configValues: {
+                          ...prev.configValues,
+                          [field.key]: event.target.value
+                        }
+                      }))
+                    }
+                  >
+                    <option value="">请选择</option>
+                    {(field.options || []).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </ModalField>
+              );
+            }
+
+            return (
+              <ModalField key={field.key} label={field.label} hint={field.placeholder}>
+                <Input
+                  className={MODAL_INPUT_CLASS}
+                  type={field.type === "number" ? "number" : field.type === "url" ? "url" : "text"}
+                  min={field.min}
+                  max={field.max}
+                  value={cardForm.configValues[field.key] || ""}
+                  placeholder={field.placeholder}
+                  onChange={(event) =>
+                    setCardForm((prev) => ({
+                      ...prev,
+                      configValues: {
+                        ...prev.configValues,
+                        [field.key]: event.target.value
+                      }
+                    }))
+                  }
+                />
               </ModalField>
-            </>
-          )}
+            );
+          })}
 
           <ModalField label="图标（Emoji / Iconify）">
             <Input
@@ -1404,19 +1386,17 @@ export function SettingsPage() {
             </select>
           </ModalField>
 
-          {cardForm.cardType === "generic" && (
-            <ModalField label="打开方式">
-              <select
-                className={MODAL_SELECT_CLASS}
-                value={cardForm.openMode}
-                onChange={(event) => setCardForm((prev) => ({ ...prev, openMode: event.target.value as CardOpenMode }))}
-              >
-                <option value="iframe">iframe 小窗</option>
-                <option value="newtab">新标签页</option>
-                <option value="auto">自动</option>
-              </select>
-            </ModalField>
-          )}
+          <ModalField label="打开方式">
+            <select
+              className={MODAL_SELECT_CLASS}
+              value={cardForm.openMode}
+              onChange={(event) => setCardForm((prev) => ({ ...prev, openMode: event.target.value as CardOpenMode }))}
+            >
+              <option value="iframe">iframe 小窗</option>
+              <option value="newtab">新标签页</option>
+              <option value="auto">自动</option>
+            </select>
+          </ModalField>
 
           <ModalField label="排序">
             <Input
@@ -1436,7 +1416,7 @@ export function SettingsPage() {
             启用服务
           </label>
 
-          {cardForm.cardType === "generic" && (
+          {currentSchema?.healthCheckSupported && (
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input
                 type="checkbox"

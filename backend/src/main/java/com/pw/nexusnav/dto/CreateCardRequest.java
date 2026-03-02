@@ -1,8 +1,10 @@
 package com.pw.nexusnav.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class CreateCardRequest {
 
@@ -17,47 +19,13 @@ public class CreateCardRequest {
     @Size(max = 128)
     private String name;
 
-    @Size(max = 2048)
-    private String url;
-
-    @Size(max = 2048)
-    private String lanUrl;
-
-    @Size(max = 2048)
-    private String wanUrl;
-
     @NotBlank
-    @Pattern(regexp = "^(iframe|newtab|auto)$")
-    private String openMode;
-
-    @Pattern(regexp = "^(generic|ssh|emby|qbittorrent|transmission)$")
+    @Size(max = 32)
     private String cardType;
 
-    @Size(max = 255)
-    private String sshHost;
-
-    private Integer sshPort;
-
-    @Size(max = 128)
-    private String sshUsername;
-
-    @Pattern(regexp = "^(password|privatekey)$")
-    private String sshAuthMode;
-
-    @Size(max = 512)
-    private String embyApiKey;
-
-    @Size(max = 128)
-    private String qbittorrentUsername;
-
-    @Size(max = 512)
-    private String qbittorrentPassword;
-
-    @Size(max = 128)
-    private String transmissionUsername;
-
-    @Size(max = 512)
-    private String transmissionPassword;
+    @NotBlank
+    @Size(max = 32)
+    private String openMode = "iframe";
 
     @Size(max = 128)
     private String icon;
@@ -66,9 +34,10 @@ public class CreateCardRequest {
     private String description;
 
     private int orderIndex;
-
     private boolean enabled = true;
     private boolean healthCheckEnabled = true;
+    private Map<String, Object> config = new LinkedHashMap<>();
+    private Map<String, String> secrets = new LinkedHashMap<>();
 
     public String getId() {
         return id;
@@ -94,38 +63,6 @@ public class CreateCardRequest {
         this.name = name;
     }
 
-    public String getUrl() {
-        return url;
-    }
-
-    public void setUrl(String url) {
-        this.url = url;
-    }
-
-    public String getLanUrl() {
-        return lanUrl;
-    }
-
-    public void setLanUrl(String lanUrl) {
-        this.lanUrl = lanUrl;
-    }
-
-    public String getWanUrl() {
-        return wanUrl;
-    }
-
-    public void setWanUrl(String wanUrl) {
-        this.wanUrl = wanUrl;
-    }
-
-    public String getOpenMode() {
-        return openMode;
-    }
-
-    public void setOpenMode(String openMode) {
-        this.openMode = openMode;
-    }
-
     public String getCardType() {
         return cardType;
     }
@@ -134,76 +71,12 @@ public class CreateCardRequest {
         this.cardType = cardType;
     }
 
-    public String getSshHost() {
-        return sshHost;
+    public String getOpenMode() {
+        return openMode;
     }
 
-    public void setSshHost(String sshHost) {
-        this.sshHost = sshHost;
-    }
-
-    public Integer getSshPort() {
-        return sshPort;
-    }
-
-    public void setSshPort(Integer sshPort) {
-        this.sshPort = sshPort;
-    }
-
-    public String getSshUsername() {
-        return sshUsername;
-    }
-
-    public void setSshUsername(String sshUsername) {
-        this.sshUsername = sshUsername;
-    }
-
-    public String getSshAuthMode() {
-        return sshAuthMode;
-    }
-
-    public void setSshAuthMode(String sshAuthMode) {
-        this.sshAuthMode = sshAuthMode;
-    }
-
-    public String getEmbyApiKey() {
-        return embyApiKey;
-    }
-
-    public void setEmbyApiKey(String embyApiKey) {
-        this.embyApiKey = embyApiKey;
-    }
-
-    public String getQbittorrentUsername() {
-        return qbittorrentUsername;
-    }
-
-    public void setQbittorrentUsername(String qbittorrentUsername) {
-        this.qbittorrentUsername = qbittorrentUsername;
-    }
-
-    public String getQbittorrentPassword() {
-        return qbittorrentPassword;
-    }
-
-    public void setQbittorrentPassword(String qbittorrentPassword) {
-        this.qbittorrentPassword = qbittorrentPassword;
-    }
-
-    public String getTransmissionUsername() {
-        return transmissionUsername;
-    }
-
-    public void setTransmissionUsername(String transmissionUsername) {
-        this.transmissionUsername = transmissionUsername;
-    }
-
-    public String getTransmissionPassword() {
-        return transmissionPassword;
-    }
-
-    public void setTransmissionPassword(String transmissionPassword) {
-        this.transmissionPassword = transmissionPassword;
+    public void setOpenMode(String openMode) {
+        this.openMode = openMode;
     }
 
     public String getIcon() {
@@ -244,5 +117,21 @@ public class CreateCardRequest {
 
     public void setHealthCheckEnabled(boolean healthCheckEnabled) {
         this.healthCheckEnabled = healthCheckEnabled;
+    }
+
+    public Map<String, Object> getConfig() {
+        return config;
+    }
+
+    public void setConfig(Map<String, Object> config) {
+        this.config = config;
+    }
+
+    public Map<String, String> getSecrets() {
+        return secrets;
+    }
+
+    public void setSecrets(Map<String, String> secrets) {
+        this.secrets = secrets;
     }
 }

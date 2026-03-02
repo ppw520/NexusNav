@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/config")
+@RequestMapping("/api/v2/config")
 public class ConfigController {
 
     private final AuthService authService;
@@ -58,7 +58,7 @@ public class ConfigController {
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
                 "groups", result.groups(),
                 "cards", result.cards(),
-                "message", "Nav config imported"
+                "message", "导航配置导入成功"
         )));
     }
 }

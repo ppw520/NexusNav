@@ -1,7 +1,9 @@
 package com.pw.nexusnav.service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ConfigModel {
 
@@ -155,25 +157,15 @@ public class ConfigModel {
         private String id;
         private String groupId;
         private String name;
-        private String url;
-        private String lanUrl;
-        private String wanUrl;
-        private String openMode;
+        private String openMode = "iframe";
         private String cardType = CARD_TYPE_GENERIC;
-        private String sshHost;
-        private Integer sshPort;
-        private String sshUsername;
-        private String sshAuthMode = SSH_AUTH_PASSWORD;
-        private String embyApiKey;
-        private String qbittorrentUsername;
-        private String qbittorrentPassword;
-        private String transmissionUsername;
-        private String transmissionPassword;
         private String icon;
         private String description;
         private int orderIndex;
-        private boolean enabled;
+        private boolean enabled = true;
         private boolean healthCheckEnabled = true;
+        private Map<String, Object> config = new LinkedHashMap<>();
+        private Map<String, String> secretRefs = new LinkedHashMap<>();
 
         public String getId() {
             return id;
@@ -199,30 +191,6 @@ public class ConfigModel {
             this.name = name;
         }
 
-        public String getUrl() {
-            return url;
-        }
-
-        public void setUrl(String url) {
-            this.url = url;
-        }
-
-        public String getLanUrl() {
-            return lanUrl;
-        }
-
-        public void setLanUrl(String lanUrl) {
-            this.lanUrl = lanUrl;
-        }
-
-        public String getWanUrl() {
-            return wanUrl;
-        }
-
-        public void setWanUrl(String wanUrl) {
-            this.wanUrl = wanUrl;
-        }
-
         public String getOpenMode() {
             return openMode;
         }
@@ -237,78 +205,6 @@ public class ConfigModel {
 
         public void setCardType(String cardType) {
             this.cardType = cardType;
-        }
-
-        public String getSshHost() {
-            return sshHost;
-        }
-
-        public void setSshHost(String sshHost) {
-            this.sshHost = sshHost;
-        }
-
-        public Integer getSshPort() {
-            return sshPort;
-        }
-
-        public void setSshPort(Integer sshPort) {
-            this.sshPort = sshPort;
-        }
-
-        public String getSshUsername() {
-            return sshUsername;
-        }
-
-        public void setSshUsername(String sshUsername) {
-            this.sshUsername = sshUsername;
-        }
-
-        public String getSshAuthMode() {
-            return sshAuthMode;
-        }
-
-        public void setSshAuthMode(String sshAuthMode) {
-            this.sshAuthMode = sshAuthMode;
-        }
-
-        public String getEmbyApiKey() {
-            return embyApiKey;
-        }
-
-        public void setEmbyApiKey(String embyApiKey) {
-            this.embyApiKey = embyApiKey;
-        }
-
-        public String getQbittorrentUsername() {
-            return qbittorrentUsername;
-        }
-
-        public void setQbittorrentUsername(String qbittorrentUsername) {
-            this.qbittorrentUsername = qbittorrentUsername;
-        }
-
-        public String getQbittorrentPassword() {
-            return qbittorrentPassword;
-        }
-
-        public void setQbittorrentPassword(String qbittorrentPassword) {
-            this.qbittorrentPassword = qbittorrentPassword;
-        }
-
-        public String getTransmissionUsername() {
-            return transmissionUsername;
-        }
-
-        public void setTransmissionUsername(String transmissionUsername) {
-            this.transmissionUsername = transmissionUsername;
-        }
-
-        public String getTransmissionPassword() {
-            return transmissionPassword;
-        }
-
-        public void setTransmissionPassword(String transmissionPassword) {
-            this.transmissionPassword = transmissionPassword;
         }
 
         public String getIcon() {
@@ -349,6 +245,22 @@ public class ConfigModel {
 
         public void setHealthCheckEnabled(boolean healthCheckEnabled) {
             this.healthCheckEnabled = healthCheckEnabled;
+        }
+
+        public Map<String, Object> getConfig() {
+            return config;
+        }
+
+        public void setConfig(Map<String, Object> config) {
+            this.config = config;
+        }
+
+        public Map<String, String> getSecretRefs() {
+            return secretRefs;
+        }
+
+        public void setSecretRefs(Map<String, String> secretRefs) {
+            this.secretRefs = secretRefs;
         }
     }
 

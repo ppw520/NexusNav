@@ -11,35 +11,72 @@ export type GroupDTO = {
 };
 
 export type CardOpenMode = "iframe" | "newtab" | "auto";
-export type CardType = "generic" | "ssh" | "emby" | "qbittorrent" | "transmission";
+export type CardType = string;
 export type SshAuthMode = "password" | "privatekey";
 
 export type CardDTO = {
   id: string;
   groupId: string;
   name: string;
-  url: string;
-  lanUrl?: string;
-  wanUrl?: string;
-  openMode: CardOpenMode;
   cardType: CardType;
-  sshHost?: string;
-  sshPort?: number;
-  sshUsername?: string;
-  sshAuthMode?: SshAuthMode;
-  embyApiKey?: string;
-  qbittorrentUsername?: string;
-  qbittorrentPassword?: string;
-  transmissionUsername?: string;
-  transmissionPassword?: string;
-  hasEmbyApiKey?: boolean;
-  hasQbittorrentPassword?: boolean;
-  hasTransmissionPassword?: boolean;
+  openMode: CardOpenMode;
   icon?: string;
   description?: string;
   orderIndex: number;
   enabled: boolean;
   healthCheckEnabled: boolean;
+  url?: string;
+  lanUrl?: string;
+  wanUrl?: string;
+  config: Record<string, unknown>;
+  secretState: Record<string, boolean>;
+};
+
+export type CardPayload = {
+  id?: string;
+  groupId: string;
+  name: string;
+  cardType: CardType;
+  openMode: CardOpenMode;
+  icon?: string;
+  description?: string;
+  orderIndex: number;
+  enabled: boolean;
+  healthCheckEnabled: boolean;
+  config: Record<string, unknown>;
+  secrets?: Record<string, string>;
+};
+
+export type CardOrderItemDTO = {
+  id: string;
+  orderIndex: number;
+};
+
+export type CardTypeFieldOption = {
+  label: string;
+  value: string;
+};
+
+export type CardTypeFieldSchema = {
+  key: string;
+  label: string;
+  type: "text" | "url" | "number" | "password" | "select";
+  required: boolean;
+  secret: boolean;
+  placeholder?: string;
+  defaultValue?: unknown;
+  min?: number;
+  max?: number;
+  options?: CardTypeFieldOption[];
+};
+
+export type CardTypeSchema = {
+  type: string;
+  name: string;
+  description?: string;
+  healthCheckSupported: boolean;
+  defaultOpenMode: CardOpenMode;
+  fields: CardTypeFieldSchema[];
 };
 
 export type TorrentStatusBreakdown = {
@@ -140,36 +177,6 @@ export type GroupPayload = {
   orderIndex: number;
 };
 
-export type CardPayload = {
-  id?: string;
-  groupId: string;
-  name: string;
-  url?: string;
-  lanUrl?: string;
-  wanUrl?: string;
-  openMode: CardOpenMode;
-  cardType: CardType;
-  sshHost?: string;
-  sshPort?: number;
-  sshUsername?: string;
-  sshAuthMode?: SshAuthMode;
-  embyApiKey?: string;
-  qbittorrentUsername?: string;
-  qbittorrentPassword?: string;
-  transmissionUsername?: string;
-  transmissionPassword?: string;
-  icon?: string;
-  description?: string;
-  orderIndex: number;
-  enabled: boolean;
-  healthCheckEnabled: boolean;
-};
-
-export type CardOrderItemDTO = {
-  id: string;
-  orderIndex: number;
-};
-
 export type AdminConfigDTO = {
   networkModePreference: "auto" | "lan" | "wan";
   defaultSearchEngineId: string;
@@ -190,7 +197,20 @@ export type AdminConfigUpdatePayload = AdminConfigDTO & {
 
 export type NavConfigImportPayload = {
   groups: GroupDTO[];
-  cards: CardDTO[];
+  cards: Array<{
+    id: string;
+    groupId: string;
+    name: string;
+    cardType: string;
+    openMode: CardOpenMode;
+    icon?: string;
+    description?: string;
+    orderIndex: number;
+    enabled: boolean;
+    healthCheckEnabled: boolean;
+    config: Record<string, unknown>;
+    secretRefs?: Record<string, string>;
+  }>;
 };
 
 export type VerifyConfigResponse = {

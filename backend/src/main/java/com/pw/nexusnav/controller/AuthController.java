@@ -18,7 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/api/v2/auth")
 public class AuthController {
 
     private final AuthService authService;
@@ -36,7 +36,7 @@ public class AuthController {
             )));
         }
         if (!authService.validatePassword(request.getPassword())) {
-            return ResponseEntity.status(401).body(ApiResponse.error("Invalid password"));
+            return ResponseEntity.status(401).body(ApiResponse.error("密码错误"));
         }
 
         String token = authService.createSession();
@@ -78,7 +78,7 @@ public class AuthController {
     @PostMapping("/verify-config")
     public ResponseEntity<ApiResponse<Map<String, Object>>> verifyConfig(@Valid @RequestBody VerifyConfigRequest request) {
         if (!authService.validatePassword(request.getPassword())) {
-            return ResponseEntity.status(401).body(ApiResponse.error("Invalid password"));
+            return ResponseEntity.status(401).body(ApiResponse.error("密码错误"));
         }
 
         String token = authService.createConfigVerifyToken();

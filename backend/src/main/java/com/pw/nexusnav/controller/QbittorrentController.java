@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/qbittorrent/cards/{cardId}")
+@RequestMapping("/api/v2/qbittorrent/cards/{cardId}")
 public class QbittorrentController {
 
     private final QbittorrentService qbittorrentService;

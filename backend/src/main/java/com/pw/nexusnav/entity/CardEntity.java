@@ -1,84 +1,22 @@
 package com.pw.nexusnav.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-@Entity
-@Table(name = "cards")
 public class CardEntity {
 
-    @Id
-    @Column(nullable = false, length = 64)
     private String id;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "group_id", nullable = false)
     private GroupEntity group;
-
-    @Column(nullable = false, length = 128)
     private String name;
-
-    @Column(nullable = false, length = 2048)
-    private String url;
-
-    @Column(name = "lan_url", length = 2048)
-    private String lanUrl;
-
-    @Column(name = "wan_url", length = 2048)
-    private String wanUrl;
-
-    @Column(name = "open_mode", nullable = false, length = 32)
-    private String openMode;
-
-    @Column(name = "card_type", nullable = false, length = 32)
     private String cardType = "generic";
-
-    @Column(name = "ssh_host", length = 255)
-    private String sshHost;
-
-    @Column(name = "ssh_port")
-    private Integer sshPort;
-
-    @Column(name = "ssh_username", length = 128)
-    private String sshUsername;
-
-    @Column(name = "ssh_auth_mode", length = 32)
-    private String sshAuthMode;
-
-    @Column(name = "emby_api_key", length = 512)
-    private String embyApiKey;
-
-    @Column(name = "qbittorrent_username", length = 128)
-    private String qbittorrentUsername;
-
-    @Column(name = "qbittorrent_password", length = 512)
-    private String qbittorrentPassword;
-
-    @Column(name = "transmission_username", length = 128)
-    private String transmissionUsername;
-
-    @Column(name = "transmission_password", length = 512)
-    private String transmissionPassword;
-
-    @Column(length = 128)
+    private String openMode = "iframe";
     private String icon;
-
-    @Column(length = 512)
     private String description;
-
-    @Column(name = "order_index", nullable = false)
     private int orderIndex;
-
-    @Column(nullable = false)
     private boolean enabled;
-
-    @Column(name = "health_check_enabled", nullable = false)
     private boolean healthCheckEnabled = true;
+    private Map<String, Object> config = new LinkedHashMap<>();
+    private Map<String, String> secretRefs = new LinkedHashMap<>();
 
     public String getId() {
         return id;
@@ -104,38 +42,6 @@ public class CardEntity {
         this.name = name;
     }
 
-    public String getUrl() {
-        return url;
-    }
-
-    public void setUrl(String url) {
-        this.url = url;
-    }
-
-    public String getLanUrl() {
-        return lanUrl;
-    }
-
-    public void setLanUrl(String lanUrl) {
-        this.lanUrl = lanUrl;
-    }
-
-    public String getWanUrl() {
-        return wanUrl;
-    }
-
-    public void setWanUrl(String wanUrl) {
-        this.wanUrl = wanUrl;
-    }
-
-    public String getOpenMode() {
-        return openMode;
-    }
-
-    public void setOpenMode(String openMode) {
-        this.openMode = openMode;
-    }
-
     public String getCardType() {
         return cardType;
     }
@@ -144,76 +50,12 @@ public class CardEntity {
         this.cardType = cardType;
     }
 
-    public String getSshHost() {
-        return sshHost;
+    public String getOpenMode() {
+        return openMode;
     }
 
-    public void setSshHost(String sshHost) {
-        this.sshHost = sshHost;
-    }
-
-    public Integer getSshPort() {
-        return sshPort;
-    }
-
-    public void setSshPort(Integer sshPort) {
-        this.sshPort = sshPort;
-    }
-
-    public String getSshUsername() {
-        return sshUsername;
-    }
-
-    public void setSshUsername(String sshUsername) {
-        this.sshUsername = sshUsername;
-    }
-
-    public String getSshAuthMode() {
-        return sshAuthMode;
-    }
-
-    public void setSshAuthMode(String sshAuthMode) {
-        this.sshAuthMode = sshAuthMode;
-    }
-
-    public String getEmbyApiKey() {
-        return embyApiKey;
-    }
-
-    public void setEmbyApiKey(String embyApiKey) {
-        this.embyApiKey = embyApiKey;
-    }
-
-    public String getQbittorrentUsername() {
-        return qbittorrentUsername;
-    }
-
-    public void setQbittorrentUsername(String qbittorrentUsername) {
-        this.qbittorrentUsername = qbittorrentUsername;
-    }
-
-    public String getQbittorrentPassword() {
-        return qbittorrentPassword;
-    }
-
-    public void setQbittorrentPassword(String qbittorrentPassword) {
-        this.qbittorrentPassword = qbittorrentPassword;
-    }
-
-    public String getTransmissionUsername() {
-        return transmissionUsername;
-    }
-
-    public void setTransmissionUsername(String transmissionUsername) {
-        this.transmissionUsername = transmissionUsername;
-    }
-
-    public String getTransmissionPassword() {
-        return transmissionPassword;
-    }
-
-    public void setTransmissionPassword(String transmissionPassword) {
-        this.transmissionPassword = transmissionPassword;
+    public void setOpenMode(String openMode) {
+        this.openMode = openMode;
     }
 
     public String getIcon() {
@@ -254,5 +96,21 @@ public class CardEntity {
 
     public void setHealthCheckEnabled(boolean healthCheckEnabled) {
         this.healthCheckEnabled = healthCheckEnabled;
+    }
+
+    public Map<String, Object> getConfig() {
+        return config;
+    }
+
+    public void setConfig(Map<String, Object> config) {
+        this.config = config;
+    }
+
+    public Map<String, String> getSecretRefs() {
+        return secretRefs;
+    }
+
+    public void setSecretRefs(Map<String, String> secretRefs) {
+        this.secretRefs = secretRefs;
     }
 }

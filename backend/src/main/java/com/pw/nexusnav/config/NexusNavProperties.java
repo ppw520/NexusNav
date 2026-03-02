@@ -10,6 +10,8 @@ public class NexusNavProperties {
 
     private String configPath;
     private String navPath;
+    private String secretsPath;
+    private String masterKey;
     private int healthIntervalSeconds = 30;
     private Security security = new Security();
 
@@ -27,6 +29,22 @@ public class NexusNavProperties {
 
     public void setNavPath(String navPath) {
         this.navPath = navPath;
+    }
+
+    public String getSecretsPath() {
+        return secretsPath;
+    }
+
+    public void setSecretsPath(String secretsPath) {
+        this.secretsPath = secretsPath;
+    }
+
+    public String getMasterKey() {
+        return masterKey;
+    }
+
+    public void setMasterKey(String masterKey) {
+        this.masterKey = masterKey;
     }
 
     public int getHealthIntervalSeconds() {

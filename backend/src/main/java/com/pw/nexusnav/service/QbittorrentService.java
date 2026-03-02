@@ -29,10 +29,19 @@ public class QbittorrentService {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(8);
 
     private final CardRepository cardRepository;
+    private final CardTypeSchemaService cardTypeSchemaService;
+    private final SecretStoreService secretStoreService;
     private final ObjectMapper objectMapper;
 
-    public QbittorrentService(CardRepository cardRepository, ObjectMapper objectMapper) {
+    public QbittorrentService(
+            CardRepository cardRepository,
+            CardTypeSchemaService cardTypeSchemaService,
+            SecretStoreService secretStoreService,
+            ObjectMapper objectMapper
+    ) {
         this.cardRepository = cardRepository;
+        this.cardTypeSchemaService = cardTypeSchemaService;
+        this.secretStoreService = secretStoreService;
         this.objectMapper = objectMapper;
     }
 
@@ -93,7 +102,7 @@ public class QbittorrentService {
             if (StringUtils.hasText(text)) {
                 throw new IllegalStateException("qBittorrent authentication failed: " + truncate(text, 180));
             }
-            throw new IllegalStateException("qBittorrent authentication failed");
+            throw new IllegalStateException("qBittorrent 认证失败");
         }
     }
 
@@ -116,7 +125,7 @@ public class QbittorrentService {
         try {
             return objectMapper.readTree(payload);
         } catch (IOException e) {
-            throw new IllegalStateException("qBittorrent response is not valid JSON");
+            throw new IllegalStateException("qBittorrent 返回的 JSON 无法解析");
         }
     }
 
@@ -151,9 +160,9 @@ public class QbittorrentService {
             return client.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("qBittorrent request interrupted");
+            throw new IllegalStateException("qBittorrent 请求被中断");
         } catch (IOException e) {
-            throw new IllegalStateException("qBittorrent request failed: " + e.getMessage());
+            throw new IllegalStateException("qBittorrent 请求失败：" + e.getMessage());
         }
     }
 
@@ -207,17 +216,17 @@ public class QbittorrentService {
     private String resolveErrorReason(int statusCode, String responseBody) {
         if (statusCode == 401 || statusCode == 403) {
             if (StringUtils.hasText(responseBody)) {
-                return "qBittorrent authentication failed (" + statusCode + "): " + truncate(responseBody.trim(), 180);
+                return "qBittorrent 认证失败（" + statusCode + "）：" + truncate(responseBody.trim(), 180);
             }
-            return "qBittorrent authentication failed (" + statusCode + ")";
+            return "qBittorrent 认证失败（" + statusCode + "）";
         }
         if (statusCode == 404) {
-            return "qBittorrent API endpoint not found";
+            return "qBittorrent API 路径不存在";
         }
         if (StringUtils.hasText(responseBody)) {
-            return "qBittorrent request failed (" + statusCode + "): " + truncate(responseBody.trim(), 180);
+            return "qBittorrent 请求失败（" + statusCode + "）：" + truncate(responseBody.trim(), 180);
         }
-        return "qBittorrent request failed (" + statusCode + ")";
+        return "qBittorrent 请求失败（" + statusCode + "）";
     }
 
     private String truncate(String value, int maxLength) {
@@ -233,25 +242,25 @@ public class QbittorrentService {
 
     private QbittorrentCardConfig requireQbittorrentCard(String cardId) {
         CardEntity card = cardRepository.findById(cardId)
-                .orElseThrow(() -> new IllegalArgumentException("Card not found: " + cardId));
+                .orElseThrow(() -> new IllegalArgumentException("卡片不存在：" + cardId));
         String cardType = Optional.ofNullable(card.getCardType())
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .orElse("");
         if (!ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
-            throw new IllegalArgumentException("Card is not a qBittorrent card: " + cardId);
+            throw new IllegalArgumentException("卡片类型不是 qBittorrent：" + cardId);
         }
 
-        String baseUrl = firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl());
+        String baseUrl = cardTypeSchemaService.firstNonBlankUrl(card.getConfig());
         if (!StringUtils.hasText(baseUrl)) {
-            throw new IllegalArgumentException("qBittorrent card url is required: " + cardId);
+            throw new IllegalArgumentException("qBittorrent 地址不能为空：" + cardId);
         }
-        String username = trimToNull(card.getQbittorrentUsername());
+        String username = trimToNull(cardTypeSchemaService.getTextConfig(card.getConfig(), "username"));
         if (!StringUtils.hasText(username)) {
-            throw new IllegalArgumentException("qBittorrent username is required: " + cardId);
+            throw new IllegalArgumentException("qBittorrent 用户名不能为空：" + cardId);
         }
-        String password = trimToNull(card.getQbittorrentPassword());
+        String password = trimToNull(secretStoreService.resolveCardSecret(card, "password"));
         if (!StringUtils.hasText(password)) {
-            throw new IllegalArgumentException("qBittorrent password is required: " + cardId);
+            throw new IllegalArgumentException("qBittorrent 密码未配置：" + cardId);
         }
 
         return new QbittorrentCardConfig(stripTrailingSlash(baseUrl), username, password);

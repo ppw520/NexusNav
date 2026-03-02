@@ -6,9 +6,11 @@ import com.pw.nexusnav.dto.GroupDTO;
 import com.pw.nexusnav.dto.UpdateGroupRequest;
 import com.pw.nexusnav.service.GroupService;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/groups")
+@RequestMapping("/api/v2/groups")
 public class GroupController {
 
     private final GroupService groupService;
@@ -35,7 +37,7 @@ public class GroupController {
         return ApiResponse.ok(groupService.create(request));
     }
 
-    @PostMapping("/{groupId}/update")
+    @PutMapping("/{groupId}")
     public ApiResponse<GroupDTO> updateGroup(
             @PathVariable String groupId,
             @Valid @RequestBody UpdateGroupRequest request
@@ -43,7 +45,7 @@ public class GroupController {
         return ApiResponse.ok(groupService.update(groupId, request));
     }
 
-    @PostMapping("/{groupId}/delete")
+    @DeleteMapping("/{groupId}")
     public ApiResponse<Void> deleteGroup(@PathVariable String groupId) {
         groupService.delete(groupId);
         return ApiResponse.ok(null);

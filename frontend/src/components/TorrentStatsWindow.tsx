@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ArrowDownToLine, ArrowUpFromLine, Maximize2, Minimize2, Minus, RefreshCw, X } from "lucide-react";
 import { Rnd } from "react-rnd";
-import type { CardDTO, CardType, TorrentStatsDTO } from "../types";
+import type { CardDTO, TorrentStatsDTO } from "../types";
 import { loadQbittorrentStats, loadTransmissionStats } from "../services/torrent";
 import { AppIcon } from "./AppIcon";
 import { Button } from "./ui/button";
@@ -11,7 +11,7 @@ type TorrentStatsWindowProps = {
   title: string;
   icon?: string;
   card: CardDTO;
-  provider: Extract<CardType, "qbittorrent" | "transmission">;
+  provider: "qbittorrent" | "transmission";
   zIndex: number;
   initialStats?: TorrentStatsDTO;
   onStatsUpdate?: (stats: TorrentStatsDTO) => void;

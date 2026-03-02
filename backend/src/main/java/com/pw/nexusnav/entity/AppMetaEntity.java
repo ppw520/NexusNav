@@ -1,19 +1,9 @@
 package com.pw.nexusnav.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-
-@Entity
-@Table(name = "app_meta")
 public class AppMetaEntity {
 
-    @Id
-    @Column(name = "meta_key", nullable = false, length = 64)
     private String key;
 
-    @Column(name = "meta_value", nullable = false, length = 4096)
     private String value;
 
     public String getKey() {
