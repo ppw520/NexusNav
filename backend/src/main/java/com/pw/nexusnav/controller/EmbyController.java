@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/emby/cards/{cardId}")
+@RequestMapping("/api/v2/emby/cards/{cardId}")
 public class EmbyController {
 
     private final EmbyService embyService;

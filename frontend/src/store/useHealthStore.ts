@@ -73,7 +73,7 @@ export const useHealthStore = create<HealthStore>((set, get) => ({
     }
 
     set({ probing: true });
-    const results = await Promise.all(targets.map((card) => probeUrl(card.url)));
+    const results = await Promise.all(targets.map((card) => probeUrl(card.url || "")));
     const checkedAt = Date.now();
 
     results.forEach((result, index) => {

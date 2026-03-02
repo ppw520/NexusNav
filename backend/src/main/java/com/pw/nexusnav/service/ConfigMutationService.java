@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -21,15 +23,22 @@ public class ConfigMutationService {
     }
 
     public void mutateNav(Consumer<ConfigModel.NavModel> mutation) {
-        mutate(mutation, null);
+        mutateInternal(mutation, null, null);
     }
 
     public void mutateSystem(Consumer<ConfigModel.SystemModel> mutation) {
-        mutate(null, mutation);
+        mutateInternal(null, mutation, null);
     }
 
-    public <T> T mutateNavAndReturn(UnaryOperator<ConfigModel.NavModel> mutation, java.util.function.Function<ConfigModel.NavModel, T> resultMapper) {
-        final Holder<T> holder = new Holder<>();
+    public void mutateNavAndSecrets(BiConsumer<ConfigModel.NavModel, SecretConfigModel> mutation) {
+        mutateInternal(null, null, mutation);
+    }
+
+    public <T> T mutateNavAndReturn(
+            UnaryOperator<ConfigModel.NavModel> mutation,
+            Function<ConfigModel.NavModel, T> resultMapper
+    ) {
+        Holder<T> holder = new Holder<>();
         mutateNav(model -> {
             ConfigModel.NavModel next = mutation.apply(model);
             if (next != model) {
@@ -42,17 +51,24 @@ public class ConfigMutationService {
         return holder.value;
     }
 
-    private void mutate(Consumer<ConfigModel.NavModel> navMutation, Consumer<ConfigModel.SystemModel> systemMutation) {
+    private void mutateInternal(
+            Consumer<ConfigModel.NavModel> navMutation,
+            Consumer<ConfigModel.SystemModel> systemMutation,
+            BiConsumer<ConfigModel.NavModel, SecretConfigModel> navSecretMutation
+    ) {
         lock.lock();
         try {
             Path navPath = configImportService.resolveWritableNavPath();
             Path systemPath = configImportService.resolveWritableSystemPath();
+            Path secretsPath = configImportService.resolveWritableSecretsPath();
 
             byte[] previousNavBytes = readNullable(navPath);
             byte[] previousSystemBytes = readNullable(systemPath);
+            byte[] previousSecretBytes = readNullable(secretsPath);
 
             ConfigModel.NavModel navModel = configImportService.parseNav(configImportService.loadNavBytes());
             ConfigModel.SystemModel systemModel = configImportService.parseSystem(configImportService.loadSystemBytes());
+            SecretConfigModel secretModel = configImportService.parseSecrets(configImportService.loadSecretBytes());
 
             if (navMutation != null) {
                 navMutation.accept(navModel);
@@ -60,23 +76,33 @@ public class ConfigMutationService {
             if (systemMutation != null) {
                 systemMutation.accept(systemModel);
             }
+            if (navSecretMutation != null) {
+                navSecretMutation.accept(navModel, secretModel);
+            }
 
             byte[] nextNavBytes = configImportService.stringifyBytes(navModel);
             byte[] nextSystemBytes = configImportService.stringifyBytes(systemModel);
+            byte[] nextSecretBytes = configImportService.stringifyBytes(secretModel);
 
             configImportService.parseNav(nextNavBytes);
             configImportService.parseSystem(nextSystemBytes);
+            configImportService.parseSecrets(nextSecretBytes);
 
             boolean navWritten = false;
             boolean systemWritten = false;
+            boolean secretWritten = false;
             try {
-                if (navMutation != null) {
+                if (navMutation != null || navSecretMutation != null) {
                     writeAtomically(navPath, nextNavBytes);
                     navWritten = true;
                 }
                 if (systemMutation != null) {
                     writeAtomically(systemPath, nextSystemBytes);
                     systemWritten = true;
+                }
+                if (navSecretMutation != null) {
+                    writeAtomically(secretsPath, nextSecretBytes);
+                    secretWritten = true;
                 }
                 configImportService.importConfig(true);
             } catch (Exception writeException) {
@@ -85,6 +111,9 @@ public class ConfigMutationService {
                 }
                 if (systemWritten) {
                     restore(systemPath, previousSystemBytes);
+                }
+                if (secretWritten) {
+                    restore(secretsPath, previousSecretBytes);
                 }
                 try {
                     configImportService.importConfig(true);
@@ -109,7 +138,7 @@ public class ConfigMutationService {
                 Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException e) {
-            throw new IllegalStateException("Cannot write config file: " + path, e);
+            throw new IllegalStateException("写入配置文件失败：" + path, e);
         }
     }
 
@@ -120,7 +149,7 @@ public class ConfigMutationService {
         try {
             return Files.readAllBytes(path);
         } catch (IOException e) {
-            throw new IllegalStateException("Cannot read config file: " + path, e);
+            throw new IllegalStateException("读取配置文件失败：" + path, e);
         }
     }
 
@@ -132,7 +161,7 @@ public class ConfigMutationService {
             }
             writeAtomically(path, backup);
         } catch (Exception e) {
-            throw new IllegalStateException("Cannot restore config file: " + path, e);
+            throw new IllegalStateException("回滚配置文件失败：" + path, e);
         }
     }
 

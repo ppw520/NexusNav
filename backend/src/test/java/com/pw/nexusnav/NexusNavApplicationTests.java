@@ -12,7 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:sqlite:./target/test-nexusnav.db"
+        "nexusnav.nav-path=src/main/resources/seed/nav.json",
+        "nexusnav.config-path=src/main/resources/seed/config.json",
+        "nexusnav.master-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 })
 class NexusNavApplicationTests {
 

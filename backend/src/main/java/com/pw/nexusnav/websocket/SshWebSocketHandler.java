@@ -8,6 +8,7 @@ import com.jcraft.jsch.Session;
 import com.pw.nexusnav.config.NexusNavProperties;
 import com.pw.nexusnav.entity.CardEntity;
 import com.pw.nexusnav.repository.CardRepository;
+import com.pw.nexusnav.service.CardTypeSchemaService;
 import com.pw.nexusnav.service.ConfigModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
     private final CardRepository cardRepository;
+    private final CardTypeSchemaService cardTypeSchemaService;
     private final NexusNavProperties properties;
     private final Map<String, SshRuntime> runtimes = new ConcurrentHashMap<>();
     private final ExecutorService outputExecutor = Executors.newCachedThreadPool();
@@ -43,10 +45,12 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
     public SshWebSocketHandler(
             ObjectMapper objectMapper,
             CardRepository cardRepository,
+            CardTypeSchemaService cardTypeSchemaService,
             NexusNavProperties properties
     ) {
         this.objectMapper = objectMapper;
         this.cardRepository = cardRepository;
+        this.cardTypeSchemaService = cardTypeSchemaService;
         this.properties = properties;
     }
 
@@ -80,31 +84,31 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
                 }
                 default -> {
                     log.warn("Unsupported SSH websocket message type: sessionId={}, type={}", session.getId(), type);
-                    sendError(session, "Unsupported message type");
+                    sendError(session, "不支持的消息类型");
                 }
             }
         } catch (Exception ex) {
             log.warn("Invalid SSH websocket payload: sessionId={}", session.getId(), ex);
-            sendError(session, StringUtils.hasText(ex.getMessage()) ? ex.getMessage() : "Invalid message payload");
+            sendError(session, StringUtils.hasText(ex.getMessage()) ? ex.getMessage() : "消息体格式错误");
         }
     }
 
     private void handleConnect(WebSocketSession session, JsonNode payload) {
         if (runtimes.containsKey(session.getId())) {
-            sendError(session, "SSH session already connected");
+            sendError(session, "SSH 会话已连接");
             return;
         }
         String cardId = asText(session.getAttributes().get("cardId"));
         if (!StringUtils.hasText(cardId)) {
             log.warn("SSH connect rejected: sessionId={}, reason=missing cardId", session.getId());
-            sendError(session, "Missing cardId");
+            sendError(session, "缺少 cardId");
             return;
         }
 
         CardEntity card = cardRepository.findById(cardId).orElse(null);
         if (card == null) {
             log.warn("SSH connect rejected: sessionId={}, cardId={}, reason=card not found", session.getId(), cardId);
-            sendError(session, "Card not found");
+            sendError(session, "卡片不存在");
             return;
         }
 
@@ -114,31 +118,31 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception ex) {
             log.warn("SSH connect rejected: sessionId={}, cardId={}, reason=invalid card type",
                     session.getId(), cardId, ex);
-            sendError(session, "Invalid card type");
+            sendError(session, "卡片类型无效");
             return;
         }
         if (!ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
             log.warn("SSH connect rejected: sessionId={}, cardId={}, reason=not SSH card, cardType={}",
                     session.getId(), cardId, cardType);
-            sendError(session, "Card is not SSH type");
+            sendError(session, "该卡片不是 SSH 类型");
             return;
         }
 
-        String host = card.getSshHost();
-        int port = normalizeSshPort(card.getSshPort());
-        String username = card.getSshUsername();
+        String host = cardTypeSchemaService.getTextConfig(card.getConfig(), "host");
+        int port = normalizeSshPort(cardTypeSchemaService.getIntConfig(card.getConfig(), "port", 22));
+        String username = cardTypeSchemaService.getTextConfig(card.getConfig(), "username");
         String authMode;
         try {
-            authMode = normalizeSshAuthMode(card.getSshAuthMode());
+            authMode = normalizeSshAuthMode(cardTypeSchemaService.getTextConfig(card.getConfig(), "authMode"));
         } catch (Exception ex) {
             log.warn("SSH connect rejected: sessionId={}, cardId={}, reason=invalid auth mode",
                     session.getId(), cardId, ex);
-            sendError(session, "Invalid SSH auth mode");
+            sendError(session, "SSH 认证方式无效");
             return;
         }
         if (!StringUtils.hasText(host) || !StringUtils.hasText(username)) {
             log.warn("SSH connect rejected: sessionId={}, cardId={}, reason=incomplete SSH config", session.getId(), cardId);
-            sendError(session, "SSH card config is incomplete");
+            sendError(session, "SSH 卡片配置不完整");
             return;
         }
 
@@ -150,12 +154,12 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
 
         if (ConfigModel.SSH_AUTH_PASSWORD.equals(authMode) && !StringUtils.hasText(password)) {
             log.warn("SSH connect rejected: sessionId={}, cardId={}, reason=password missing", session.getId(), cardId);
-            sendError(session, "Password is required");
+            sendError(session, "密码不能为空");
             return;
         }
         if (ConfigModel.SSH_AUTH_PRIVATE_KEY.equals(authMode) && !StringUtils.hasText(privateKey)) {
             log.warn("SSH connect rejected: sessionId={}, cardId={}, reason=private key missing", session.getId(), cardId);
-            sendError(session, "Private key is required");
+            sendError(session, "私钥不能为空");
             return;
         }
 
@@ -197,7 +201,7 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
             closeRuntime(session.getId());
             log.warn("SSH connect failed: sessionId={}, cardId={}, host={}, port={}, username={}, error={}",
                     session.getId(), cardId, host, port, username, ex.getMessage(), ex);
-            sendError(session, "SSH connect failed: " + ex.getMessage());
+            sendError(session, "SSH 连接失败：" + ex.getMessage());
         }
     }
 
@@ -205,7 +209,7 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
         SshRuntime runtime = runtimes.get(session.getId());
         if (runtime == null) {
             log.warn("SSH input rejected: sessionId={}, reason=not connected", session.getId());
-            sendError(session, "SSH session not connected");
+            sendError(session, "SSH 会话未连接");
             return;
         }
         String data = payload.path("data").asText("");
@@ -285,7 +289,7 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
                 && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)
                 && !ConfigModel.CARD_TYPE_QBITTORRENT.equals(normalized)
                 && !ConfigModel.CARD_TYPE_TRANSMISSION.equals(normalized)) {
-            throw new IllegalArgumentException("Invalid cardType: " + cardType);
+            throw new IllegalArgumentException("卡片类型无效：" + cardType);
         }
         return normalized;
     }
@@ -299,7 +303,7 @@ public class SshWebSocketHandler extends TextWebSocketHandler {
             normalized = ConfigModel.SSH_AUTH_PRIVATE_KEY;
         }
         if (!ConfigModel.SSH_AUTH_PASSWORD.equals(normalized) && !ConfigModel.SSH_AUTH_PRIVATE_KEY.equals(normalized)) {
-            throw new IllegalArgumentException("Invalid sshAuthMode: " + authMode);
+            throw new IllegalArgumentException("SSH 认证方式无效：" + authMode);
         }
         return normalized;
     }

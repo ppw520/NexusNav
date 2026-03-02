@@ -48,7 +48,7 @@ public class GroupService {
             }
 
             if (containsGroupId(groups, groupId)) {
-                throw new IllegalArgumentException("Group already exists: " + groupId);
+                throw new IllegalArgumentException("分组 ID 已存在：" + groupId);
             }
             ConfigModel.GroupItem item = new ConfigModel.GroupItem();
             item.setId(groupId);
@@ -61,7 +61,7 @@ public class GroupService {
         String finalId = createdId[0];
         return groupRepository.findById(finalId)
                 .map(group -> new GroupDTO(group.getId(), group.getName(), group.getOrderIndex()))
-                .orElseThrow(() -> new IllegalStateException("Group not found after creation: " + finalId));
+                .orElseThrow(() -> new IllegalStateException("分组创建后读取失败：" + finalId));
     }
 
     public GroupDTO update(String groupId, UpdateGroupRequest request) {
@@ -71,14 +71,14 @@ public class GroupService {
             ConfigModel.GroupItem target = groups.stream()
                     .filter(group -> group.getId().equals(groupId))
                     .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Group not found: " + groupId));
+                    .orElseThrow(() -> new IllegalArgumentException("分组不存在：" + groupId));
             target.setName(request.getName().trim());
             target.setOrderIndex(request.getOrderIndex());
         });
 
         return groupRepository.findById(groupId)
                 .map(group -> new GroupDTO(group.getId(), group.getName(), group.getOrderIndex()))
-                .orElseThrow(() -> new IllegalStateException("Group not found after update: " + groupId));
+                .orElseThrow(() -> new IllegalStateException("分组更新后读取失败：" + groupId));
     }
 
     public void delete(String groupId) {
@@ -87,7 +87,7 @@ public class GroupService {
             List<ConfigModel.CardItem> cards = new ArrayList<>(nav.getCards());
             boolean removed = groups.removeIf(group -> group.getId().equals(groupId));
             if (!removed) {
-                throw new IllegalArgumentException("Group not found: " + groupId);
+                throw new IllegalArgumentException("分组不存在：" + groupId);
             }
             cards.removeIf(card -> groupId.equals(card.getGroupId()));
             nav.setGroups(groups);

@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "2.0.0",
   "groups": [
     {
       "id": "infra",
@@ -14,43 +14,57 @@
   ],
   "cards": [
     {
-      "id": "emby",
-      "groupId": "apps",
-      "name": "Emby",
-      "lanUrl": "http://192.168.1.100:8096",
-      "wanUrl": "https://emby.example.com",
-      "openMode": "auto",
-      "icon": "video-camera",
-      "description": "Emby Media Server",
-      "orderIndex": 1,
-      "enabled": true,
-      "healthCheckEnabled": true
-    },
-    {
       "id": "router",
       "groupId": "infra",
       "name": "Router",
-      "lanUrl": "http://192.168.1.1",
-      "wanUrl": "https://router.example.com",
+      "cardType": "generic",
       "openMode": "newtab",
       "icon": "global",
       "description": "Home gateway",
-      "orderIndex": 2,
+      "orderIndex": 1,
       "enabled": true,
-      "healthCheckEnabled": true
+      "healthCheckEnabled": true,
+      "config": {
+        "lanUrl": "http://192.168.1.1",
+        "wanUrl": "https://router.example.com"
+      },
+      "secretRefs": {}
     },
     {
       "id": "grafana",
       "groupId": "apps",
       "name": "Grafana",
-      "lanUrl": "http://192.168.1.100:3000",
-      "wanUrl": "https://grafana.example.com",
+      "cardType": "generic",
       "openMode": "auto",
       "icon": "dashboard",
       "description": "Observability dashboard",
+      "orderIndex": 2,
+      "enabled": true,
+      "healthCheckEnabled": true,
+      "config": {
+        "lanUrl": "http://192.168.1.100:3000",
+        "wanUrl": "https://grafana.example.com"
+      },
+      "secretRefs": {}
+    },
+    {
+      "id": "ssh-node",
+      "groupId": "infra",
+      "name": "SSH Node",
+      "cardType": "ssh",
+      "openMode": "iframe",
+      "icon": "terminal",
+      "description": "Remote shell entry",
       "orderIndex": 3,
       "enabled": true,
-      "healthCheckEnabled": true
+      "healthCheckEnabled": false,
+      "config": {
+        "host": "192.168.1.200",
+        "port": 22,
+        "username": "root",
+        "authMode": "password"
+      },
+      "secretRefs": {}
     }
   ]
 }

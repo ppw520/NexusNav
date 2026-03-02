@@ -48,11 +48,20 @@ public class EmbyService {
     );
 
     private final CardRepository cardRepository;
+    private final CardTypeSchemaService cardTypeSchemaService;
+    private final SecretStoreService secretStoreService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-    public EmbyService(CardRepository cardRepository, ObjectMapper objectMapper) {
+    public EmbyService(
+            CardRepository cardRepository,
+            CardTypeSchemaService cardTypeSchemaService,
+            SecretStoreService secretStoreService,
+            ObjectMapper objectMapper
+    ) {
         this.cardRepository = cardRepository;
+        this.cardTypeSchemaService = cardTypeSchemaService;
+        this.secretStoreService = secretStoreService;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     }
@@ -91,7 +100,7 @@ public class EmbyService {
 
     public EmbyTaskRunResultDTO runTask(String cardId, String taskId) {
         if (!StringUtils.hasText(taskId)) {
-            throw new IllegalArgumentException("taskId is required");
+            throw new IllegalArgumentException("taskId 不能为空");
         }
 
         EmbyCardConfig config = requireEmbyCard(cardId);
@@ -99,7 +108,7 @@ public class EmbyService {
         EmbyTaskDTO targetTask = tasks.stream()
                 .filter(task -> task.id().equals(taskId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+                .orElseThrow(() -> new IllegalArgumentException("任务不存在：" + taskId));
 
         sendRequest(config, "POST", "/ScheduledTasks/Running/" + encodeSegment(taskId));
         log.info("Emby task triggered: cardId={}, taskId={}", cardId, taskId);
@@ -109,7 +118,7 @@ public class EmbyService {
                 targetTask.name(),
                 true,
                 targetTask.state(),
-                "Task triggered",
+                "任务已触发",
                 System.currentTimeMillis(),
                 "proxy"
         );
@@ -313,7 +322,7 @@ public class EmbyService {
         try {
             return objectMapper.readTree(body);
         } catch (IOException e) {
-            throw new IllegalStateException("Emby response is not valid JSON");
+            throw new IllegalStateException("Emby 返回的 JSON 无法解析");
         }
     }
 
@@ -331,9 +340,9 @@ public class EmbyService {
             response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Emby request interrupted");
+            throw new IllegalStateException("Emby 请求被中断");
         } catch (IOException e) {
-            throw new IllegalStateException("Emby request failed: " + e.getMessage());
+            throw new IllegalStateException("Emby 请求失败：" + e.getMessage());
         }
 
         int statusCode = response.statusCode();
@@ -355,10 +364,10 @@ public class EmbyService {
 
     private String resolveErrorReason(int statusCode, String responseBody) {
         if (statusCode == 401 || statusCode == 403) {
-            return "Emby authentication failed";
+            return "Emby 认证失败";
         }
         if (statusCode == 404) {
-            return "Emby API endpoint not found";
+            return "Emby API 路径不存在";
         }
         String detail = firstNonBlank(
                 readJsonText(responseBody, "Message"),
@@ -367,9 +376,9 @@ public class EmbyService {
                 truncate(responseBody, 180)
         );
         if (StringUtils.hasText(detail)) {
-            return "Emby request failed (" + statusCode + "): " + detail;
+            return "Emby 请求失败（" + statusCode + "）：" + detail;
         }
-        return "Emby request failed (" + statusCode + ")";
+        return "Emby 请求失败（" + statusCode + "）";
     }
 
     private String readJsonText(String payload, String fieldName) {
@@ -440,21 +449,21 @@ public class EmbyService {
 
     private EmbyCardConfig requireEmbyCard(String cardId) {
         CardEntity card = cardRepository.findById(cardId)
-                .orElseThrow(() -> new IllegalArgumentException("Card not found: " + cardId));
+                .orElseThrow(() -> new IllegalArgumentException("卡片不存在：" + cardId));
         String cardType = Optional.ofNullable(card.getCardType())
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .orElse("");
         if (!ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
-            throw new IllegalArgumentException("Card is not an emby card: " + cardId);
+            throw new IllegalArgumentException("卡片类型不是 Emby：" + cardId);
         }
 
-        String baseUrl = firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl());
+        String baseUrl = cardTypeSchemaService.firstNonBlankUrl(card.getConfig());
         if (!StringUtils.hasText(baseUrl)) {
-            throw new IllegalArgumentException("Emby card url is required: " + cardId);
+            throw new IllegalArgumentException("Emby 地址不能为空：" + cardId);
         }
-        String apiKey = card.getEmbyApiKey();
+        String apiKey = secretStoreService.resolveCardSecret(card, "apiKey");
         if (!StringUtils.hasText(apiKey)) {
-            throw new IllegalArgumentException("Emby API key is required: " + cardId);
+            throw new IllegalArgumentException("Emby API Key 未配置：" + cardId);
         }
 
         return new EmbyCardConfig(cardId, stripTrailingSlash(baseUrl), apiKey.trim());

@@ -1,6 +1,7 @@
 import { ExternalLink, MonitorPlay, TerminalSquare } from "lucide-react";
 import type { CardDTO, HealthStatusDTO, TorrentStatsDTO } from "../types";
 import { AppIcon } from "./AppIcon";
+import { resolveCardRenderer } from "../lib/cardRegistry";
 
 type ServiceCardProps = {
   service: CardDTO;
@@ -44,12 +45,8 @@ export function ServiceCard({
   onDragStart,
   onDrop
 }: ServiceCardProps) {
-  const detailText =
-    service.cardType === "emby"
-      ? `媒体总数: ${embyMediaTotal ?? "--"}`
-      : service.cardType === "qbittorrent" || service.cardType === "transmission"
-        ? `↓ ${formatSpeed(torrentStats?.downloadSpeed)} · ↑ ${formatSpeed(torrentStats?.uploadSpeed)}`
-        : service.url;
+  const renderer = resolveCardRenderer(service.cardType);
+  const detailText = renderer.getDetail(service, { embyMediaTotal, torrentStats });
 
   return (
     <div
@@ -85,34 +82,19 @@ export function ServiceCard({
         <div className="px-4 pb-4">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span className="mr-2 flex-1 truncate">{detailText}</span>
-            {service.cardType === "ssh" && <TerminalSquare className="h-3 w-3 flex-shrink-0" />}
-            {service.cardType === "emby" && <MonitorPlay className="h-3 w-3 flex-shrink-0" />}
-            {service.cardType === "generic" && service.openMode === "newtab" && <ExternalLink className="h-3 w-3 flex-shrink-0" />}
-            {service.cardType === "qbittorrent" && (
-              <span className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">QBT</span>
+            {renderer.openKind === "ssh" && <TerminalSquare className="h-3 w-3 flex-shrink-0" />}
+            {renderer.openKind === "emby" && <MonitorPlay className="h-3 w-3 flex-shrink-0" />}
+            {renderer.openKind === "iframe" && service.openMode === "newtab" && (
+              <ExternalLink className="h-3 w-3 flex-shrink-0" />
             )}
-            {service.cardType === "transmission" && (
-              <span className="rounded border border-indigo-400/40 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] text-indigo-200">TR</span>
+            {renderer.tag && (
+              <span className="rounded border border-white/30 bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-100">
+                {renderer.tag}
+              </span>
             )}
           </div>
         </div>
       </article>
     </div>
   );
-}
-
-function formatSpeed(value?: number) {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    return "--";
-  }
-  if (value < 1024) {
-    return `${value.toFixed(0)} B/s`;
-  }
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB/s`;
-  }
-  if (value < 1024 * 1024 * 1024) {
-    return `${(value / (1024 * 1024)).toFixed(1)} MB/s`;
-  }
-  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB/s`;
 }

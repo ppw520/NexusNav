@@ -2,17 +2,13 @@ package com.pw.nexusnav.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pw.nexusnav.config.NexusNavProperties;
-import com.pw.nexusnav.entity.AppMetaEntity;
 import com.pw.nexusnav.entity.CardEntity;
 import com.pw.nexusnav.entity.GroupEntity;
-import com.pw.nexusnav.repository.AppMetaRepository;
 import com.pw.nexusnav.repository.CardRepository;
 import com.pw.nexusnav.repository.GroupRepository;
 import jakarta.annotation.PostConstruct;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
@@ -24,42 +20,43 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
 @Service
 public class ConfigImportService {
 
-    public static final String NAV_HASH_KEY = "nav_hash";
-    public static final String NAV_VERSION_KEY = "nav_version";
-    public static final String SYSTEM_HASH_KEY = "system_hash";
-    public static final String SYSTEM_CONFIG_KEY = "system_config_json";
     private static final int MAX_BACKGROUND_IMAGE_BYTES = 512 * 1024;
     private static final int MAX_SEARCH_ICON_LENGTH = 2048;
-
-    private static final BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder();
 
     private final ObjectMapper objectMapper;
     private final GroupRepository groupRepository;
     private final CardRepository cardRepository;
-    private final AppMetaRepository appMetaRepository;
     private final NexusNavProperties properties;
+    private final CardTypeSchemaService cardTypeSchemaService;
+
+    private volatile String lastNavHash = "";
+    private volatile String lastSystemHash = "";
+    private volatile ConfigModel.SystemModel cachedSystemModel;
 
     public ConfigImportService(
             ObjectMapper objectMapper,
             GroupRepository groupRepository,
             CardRepository cardRepository,
-            AppMetaRepository appMetaRepository,
-            NexusNavProperties properties
+            NexusNavProperties properties,
+            CardTypeSchemaService cardTypeSchemaService
     ) {
         this.objectMapper = objectMapper;
         this.groupRepository = groupRepository;
         this.cardRepository = cardRepository;
-        this.appMetaRepository = appMetaRepository;
         this.properties = properties;
+        this.cardTypeSchemaService = cardTypeSchemaService;
     }
 
     @PostConstruct
@@ -67,59 +64,35 @@ public class ConfigImportService {
         importConfig(true);
     }
 
-    @Transactional
-    public ImportResult importConfig(boolean prune) {
+    public synchronized ImportResult importConfig(boolean prune) {
         byte[] navBytes = loadNavBytes();
         byte[] systemBytes = loadSystemBytes();
 
         String navHash = computeHash(navBytes);
         String systemHash = computeHash(systemBytes);
+        boolean navChanged = !navHash.equals(lastNavHash);
+        boolean systemChanged = !systemHash.equals(lastSystemHash);
 
-        boolean navChanged = isHashChanged(NAV_HASH_KEY, navHash);
-        boolean systemChanged = isHashChanged(SYSTEM_HASH_KEY, systemHash);
+        ConfigModel.NavModel navModel = parseNav(navBytes);
+        ConfigModel.SystemModel systemModel = parseSystem(systemBytes);
 
-        ConfigModel.NavModel navModel;
-        ConfigModel.SystemModel systemModel;
-        try {
-            navModel = objectMapper.readValue(navBytes, ConfigModel.NavModel.class);
-            systemModel = objectMapper.readValue(systemBytes, ConfigModel.SystemModel.class);
-        } catch (IOException e) {
-            throw new IllegalStateException("Invalid config JSON", e);
-        }
-
-        normalizeNavModel(navModel);
-        normalizeSystemModel(systemModel);
-        validateNavModel(navModel);
-        validateSystemModel(systemModel);
-
-        if (navChanged || prune) {
-            syncNav(navModel, prune);
-            upsertMeta(NAV_HASH_KEY, navHash);
-            upsertMeta(NAV_VERSION_KEY, navModel.getVersion() == null ? "" : navModel.getVersion());
-        }
-
-        if (systemChanged) {
-            upsertMeta(SYSTEM_HASH_KEY, systemHash);
-            upsertMeta(SYSTEM_CONFIG_KEY, stringify(systemModel));
-        } else if (appMetaRepository.findById(SYSTEM_CONFIG_KEY).isEmpty()) {
-            upsertMeta(SYSTEM_CONFIG_KEY, stringify(systemModel));
-        }
+        syncNav(navModel, prune);
+        cachedSystemModel = systemModel;
+        lastNavHash = navHash;
+        lastSystemHash = systemHash;
 
         boolean changed = navChanged || systemChanged;
-        return new ImportResult(changed, changed ? "Config imported" : "Config hash unchanged");
+        return new ImportResult(changed, changed ? "配置已导入" : "配置无变化");
     }
 
     public ConfigModel.SystemModel getSystemConfig() {
-        ConfigModel.SystemModel model = appMetaRepository.findById(SYSTEM_CONFIG_KEY)
-                .map(AppMetaEntity::getValue)
-                .map(this::parseSystemConfig)
-                .orElseGet(() -> {
-                    byte[] systemBytes = loadSystemBytes();
-                    return parseSystemConfig(new String(systemBytes));
-                });
-        normalizeSystemModel(model);
-        validateSystemModel(model);
-        return model;
+        ConfigModel.SystemModel cached = cachedSystemModel;
+        if (cached != null) {
+            return cloneSystemModel(cached);
+        }
+        ConfigModel.SystemModel loaded = parseSystem(loadSystemBytes());
+        cachedSystemModel = loaded;
+        return cloneSystemModel(loaded);
     }
 
     public byte[] loadNavBytes() {
@@ -127,7 +100,7 @@ public class ConfigImportService {
         if (StringUtils.hasText(navPath)) {
             Path path = Path.of(navPath);
             if (Files.exists(path)) {
-                return readFile(path, "nav file");
+                return readFile(path, "导航配置文件");
             }
         }
 
@@ -135,20 +108,20 @@ public class ConfigImportService {
             Path base = Path.of(properties.getConfigPath());
             Path sibling = base.resolveSibling("nav.json");
             if (Files.exists(sibling)) {
-                return readFile(sibling, "nav sibling file");
+                return readFile(sibling, "导航配置文件");
             }
         }
 
         Path workspaceConfig = detectWorkspaceConfigPath("nav.json");
         if (workspaceConfig != null && Files.exists(workspaceConfig)) {
-            return readFile(workspaceConfig, "workspace nav file");
+            return readFile(workspaceConfig, "导航配置文件");
         }
 
         ClassPathResource resource = new ClassPathResource("seed/nav.json");
         try (InputStream inputStream = resource.getInputStream()) {
             return inputStream.readAllBytes();
         } catch (IOException e) {
-            throw new IllegalStateException("Cannot read classpath nav config", e);
+            throw new IllegalStateException("无法读取默认导航配置", e);
         }
     }
 
@@ -156,21 +129,29 @@ public class ConfigImportService {
         if (StringUtils.hasText(properties.getConfigPath())) {
             Path path = Path.of(properties.getConfigPath());
             if (Files.exists(path)) {
-                return readFile(path, "system config file");
+                return readFile(path, "系统配置文件");
             }
         }
 
         Path workspaceConfig = detectWorkspaceConfigPath("config.json");
         if (workspaceConfig != null && Files.exists(workspaceConfig)) {
-            return readFile(workspaceConfig, "workspace system config file");
+            return readFile(workspaceConfig, "系统配置文件");
         }
 
         ClassPathResource resource = new ClassPathResource("seed/config.json");
         try (InputStream inputStream = resource.getInputStream()) {
             return inputStream.readAllBytes();
         } catch (IOException e) {
-            throw new IllegalStateException("Cannot read classpath system config", e);
+            throw new IllegalStateException("无法读取默认系统配置", e);
         }
+    }
+
+    public byte[] loadSecretBytes() {
+        Path path = resolveReadableSecretsPath();
+        if (path != null && Files.exists(path)) {
+            return readFile(path, "密文配置文件");
+        }
+        return stringifyBytes(new SecretConfigModel());
     }
 
     public Path resolveWritableNavPath() {
@@ -195,6 +176,21 @@ public class ConfigImportService {
         return ensureParent(Paths.get("config", "config.json").toAbsolutePath().normalize());
     }
 
+    public Path resolveWritableSecretsPath() {
+        if (StringUtils.hasText(properties.getSecretsPath())) {
+            return ensureParent(Path.of(properties.getSecretsPath()));
+        }
+        if (StringUtils.hasText(properties.getConfigPath())) {
+            Path configPath = Path.of(properties.getConfigPath()).toAbsolutePath().normalize();
+            return ensureParent(configPath.resolveSibling("secrets.json"));
+        }
+        Path workspace = detectWorkspaceConfigPath("secrets.json");
+        if (workspace != null) {
+            return ensureParent(workspace);
+        }
+        return ensureParent(Paths.get("config", "secrets.json").toAbsolutePath().normalize());
+    }
+
     public ConfigModel.NavModel parseNav(byte[] payload) {
         try {
             ConfigModel.NavModel model = objectMapper.readValue(payload, ConfigModel.NavModel.class);
@@ -202,7 +198,7 @@ public class ConfigImportService {
             validateNavModel(model);
             return model;
         } catch (IOException e) {
-            throw new IllegalStateException("Invalid nav config JSON", e);
+            throw new IllegalStateException("导航配置 JSON 格式错误", e);
         }
     }
 
@@ -213,7 +209,18 @@ public class ConfigImportService {
             validateSystemModel(model);
             return model;
         } catch (IOException e) {
-            throw new IllegalStateException("Invalid system config JSON", e);
+            throw new IllegalStateException("系统配置 JSON 格式错误", e);
+        }
+    }
+
+    public SecretConfigModel parseSecrets(byte[] payload) {
+        try {
+            SecretConfigModel model = objectMapper.readValue(payload, SecretConfigModel.class);
+            normalizeSecretsModel(model);
+            validateSecretsModel(model);
+            return model;
+        } catch (IOException e) {
+            throw new IllegalStateException("密文配置 JSON 格式错误", e);
         }
     }
 
@@ -221,115 +228,67 @@ public class ConfigImportService {
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(value);
         } catch (IOException e) {
-            throw new IllegalStateException("Cannot stringify config", e);
-        }
-    }
-
-    private ConfigModel.SystemModel parseSystemConfig(String json) {
-        try {
-            return objectMapper.readValue(json, ConfigModel.SystemModel.class);
-        } catch (IOException e) {
-            throw new IllegalStateException("Invalid stored system config JSON", e);
+            throw new IllegalStateException("配置序列化失败", e);
         }
     }
 
     private void syncNav(ConfigModel.NavModel model, boolean prune) {
+        Map<String, GroupEntity> groupMap = new HashMap<>();
+        if (prune) {
+            groupRepository.clear();
+            cardRepository.clear();
+        } else {
+            for (GroupEntity existing : groupRepository.findAll()) {
+                groupMap.put(existing.getId(), existing);
+            }
+        }
+
         Set<String> groupIds = new HashSet<>();
-        for (ConfigModel.GroupItem item : model.getGroups()) {
-            GroupEntity entity = groupRepository.findById(item.getId()).orElseGet(GroupEntity::new);
-            entity.setId(item.getId());
-            entity.setName(item.getName());
-            entity.setOrderIndex(item.getOrderIndex());
+        for (ConfigModel.GroupItem group : model.getGroups()) {
+            GroupEntity entity = groupRepository.findById(group.getId()).orElseGet(GroupEntity::new);
+            entity.setId(group.getId());
+            entity.setName(group.getName());
+            entity.setOrderIndex(group.getOrderIndex());
             groupRepository.save(entity);
-            groupIds.add(item.getId());
+            groupMap.put(entity.getId(), entity);
+            groupIds.add(entity.getId());
         }
 
         Set<String> cardIds = new HashSet<>();
-        for (ConfigModel.CardItem item : model.getCards()) {
-            GroupEntity group = groupRepository.findById(item.getGroupId())
-                    .orElseThrow(() -> new IllegalStateException("Card group not found: " + item.getGroupId()));
-            CardEntity entity = cardRepository.findById(item.getId()).orElseGet(CardEntity::new);
-            String cardType = normalizeCardType(item.getCardType());
-            entity.setId(item.getId());
-            entity.setGroup(group);
-            entity.setName(item.getName());
-            entity.setLanUrl(item.getLanUrl());
-            entity.setWanUrl(item.getWanUrl());
-            String baseUrl = resolveCardUrl(cardType, item.getUrl(), item.getLanUrl(), item.getWanUrl(), item.getSshHost(), item.getSshPort());
-            entity.setUrl(baseUrl == null ? "" : baseUrl);
-            entity.setOpenMode(normalizeOpenMode(item.getOpenMode()));
-            entity.setCardType(cardType);
-            if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
-                entity.setSshHost(item.getSshHost());
-                entity.setSshPort(item.getSshPort());
-                entity.setSshUsername(item.getSshUsername());
-                entity.setSshAuthMode(item.getSshAuthMode());
-                entity.setEmbyApiKey(null);
-                entity.setQbittorrentUsername(null);
-                entity.setQbittorrentPassword(null);
-                entity.setTransmissionUsername(null);
-                entity.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
-                entity.setSshHost(null);
-                entity.setSshPort(null);
-                entity.setSshUsername(null);
-                entity.setSshAuthMode(null);
-                entity.setEmbyApiKey(item.getEmbyApiKey());
-                entity.setQbittorrentUsername(null);
-                entity.setQbittorrentPassword(null);
-                entity.setTransmissionUsername(null);
-                entity.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
-                entity.setSshHost(null);
-                entity.setSshPort(null);
-                entity.setSshUsername(null);
-                entity.setSshAuthMode(null);
-                entity.setEmbyApiKey(null);
-                entity.setQbittorrentUsername(item.getQbittorrentUsername());
-                entity.setQbittorrentPassword(item.getQbittorrentPassword());
-                entity.setTransmissionUsername(null);
-                entity.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
-                entity.setSshHost(null);
-                entity.setSshPort(null);
-                entity.setSshUsername(null);
-                entity.setSshAuthMode(null);
-                entity.setEmbyApiKey(null);
-                entity.setQbittorrentUsername(null);
-                entity.setQbittorrentPassword(null);
-                entity.setTransmissionUsername(item.getTransmissionUsername());
-                entity.setTransmissionPassword(item.getTransmissionPassword());
-            } else {
-                entity.setSshHost(null);
-                entity.setSshPort(null);
-                entity.setSshUsername(null);
-                entity.setSshAuthMode(null);
-                entity.setEmbyApiKey(null);
-                entity.setQbittorrentUsername(null);
-                entity.setQbittorrentPassword(null);
-                entity.setTransmissionUsername(null);
-                entity.setTransmissionPassword(null);
+        for (ConfigModel.CardItem card : model.getCards()) {
+            GroupEntity group = groupMap.get(card.getGroupId());
+            if (group == null) {
+                throw new IllegalStateException("卡片分组不存在：" + card.getGroupId());
             }
-            entity.setIcon(item.getIcon());
-            entity.setDescription(item.getDescription());
-            entity.setOrderIndex(item.getOrderIndex());
-            entity.setEnabled(item.isEnabled());
-            entity.setHealthCheckEnabled(isHealthCheckSupported(cardType) && item.isHealthCheckEnabled());
+            CardEntity entity = cardRepository.findById(card.getId()).orElseGet(CardEntity::new);
+            entity.setId(card.getId());
+            entity.setGroup(group);
+            entity.setName(card.getName());
+            entity.setCardType(card.getCardType());
+            entity.setOpenMode(card.getOpenMode());
+            entity.setIcon(card.getIcon());
+            entity.setDescription(card.getDescription());
+            entity.setOrderIndex(card.getOrderIndex());
+            entity.setEnabled(card.isEnabled());
+            entity.setHealthCheckEnabled(card.isHealthCheckEnabled());
+            entity.setConfig(new LinkedHashMap<>(card.getConfig()));
+            entity.setSecretRefs(new LinkedHashMap<>(card.getSecretRefs()));
             cardRepository.save(entity);
-            cardIds.add(item.getId());
+            cardIds.add(entity.getId());
         }
 
-        if (prune) {
-            List<CardEntity> cardsToDelete = cardRepository.findAll().stream()
-                    .filter(card -> !cardIds.contains(card.getId()))
-                    .toList();
-            if (!cardsToDelete.isEmpty()) {
-                cardRepository.deleteAll(cardsToDelete);
-            }
-            groupRepository.findAll().stream()
-                    .filter(group -> !groupIds.contains(group.getId()))
-                    .forEach(groupRepository::delete);
+        if (!prune) {
+            return;
         }
+
+        cardRepository.findAll().stream()
+                .filter(card -> !cardIds.contains(card.getId()))
+                .toList()
+                .forEach(cardRepository::delete);
+        groupRepository.findAll().stream()
+                .filter(group -> !groupIds.contains(group.getId()))
+                .toList()
+                .forEach(groupRepository::delete);
     }
 
     private void normalizeNavModel(ConfigModel.NavModel model) {
@@ -340,70 +299,26 @@ public class ConfigImportService {
             model.setCards(new ArrayList<>());
         }
         for (ConfigModel.CardItem card : model.getCards()) {
-            String cardType = normalizeCardType(card.getCardType());
-            card.setCardType(cardType);
-            card.setOpenMode(normalizeOpenMode(card.getOpenMode()));
-            if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
-                card.setSshHost(emptyToNull(card.getSshHost()));
-                card.setSshPort(normalizeSshPort(card.getSshPort()));
-                card.setSshUsername(emptyToNull(card.getSshUsername()));
-                card.setSshAuthMode(normalizeSshAuthMode(card.getSshAuthMode()));
-                card.setEmbyApiKey(null);
-                card.setQbittorrentUsername(null);
-                card.setQbittorrentPassword(null);
-                card.setTransmissionUsername(null);
-                card.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
-                card.setSshHost(null);
-                card.setSshPort(null);
-                card.setSshUsername(null);
-                card.setSshAuthMode(null);
-                card.setEmbyApiKey(emptyToNull(card.getEmbyApiKey()));
-                card.setQbittorrentUsername(null);
-                card.setQbittorrentPassword(null);
-                card.setTransmissionUsername(null);
-                card.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
-                card.setSshHost(null);
-                card.setSshPort(null);
-                card.setSshUsername(null);
-                card.setSshAuthMode(null);
-                card.setEmbyApiKey(null);
-                card.setQbittorrentUsername(emptyToNull(card.getQbittorrentUsername()));
-                card.setQbittorrentPassword(emptyToNull(card.getQbittorrentPassword()));
-                card.setTransmissionUsername(null);
-                card.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
-                card.setSshHost(null);
-                card.setSshPort(null);
-                card.setSshUsername(null);
-                card.setSshAuthMode(null);
-                card.setEmbyApiKey(null);
-                card.setQbittorrentUsername(null);
-                card.setQbittorrentPassword(null);
-                card.setTransmissionUsername(emptyToNull(card.getTransmissionUsername()));
-                card.setTransmissionPassword(emptyToNull(card.getTransmissionPassword()));
-            } else {
-                card.setSshHost(null);
-                card.setSshPort(null);
-                card.setSshUsername(null);
-                card.setSshAuthMode(null);
-                card.setEmbyApiKey(null);
-                card.setQbittorrentUsername(null);
-                card.setQbittorrentPassword(null);
-                card.setTransmissionUsername(null);
-                card.setTransmissionPassword(null);
+            card.setCardType(cardTypeSchemaService.normalizeCardType(card.getCardType()));
+            card.setOpenMode(cardTypeSchemaService.normalizeOpenMode(card.getOpenMode()));
+            if (card.getConfig() == null) {
+                card.setConfig(new LinkedHashMap<>());
             }
-            String fallbackUrl = resolveCardUrl(
-                    cardType,
-                    card.getUrl(),
-                    card.getLanUrl(),
-                    card.getWanUrl(),
-                    card.getSshHost(),
-                    card.getSshPort()
-            );
-            card.setUrl(fallbackUrl == null ? "" : fallbackUrl);
-            card.setHealthCheckEnabled(isHealthCheckSupported(cardType) && card.isHealthCheckEnabled());
+            card.setConfig(cardTypeSchemaService.normalizeConfig(card.getCardType(), card.getConfig()));
+            card.setHealthCheckEnabled(cardTypeSchemaService.supportsHealthCheck(card.getCardType()) && card.isHealthCheckEnabled());
+            if (card.getSecretRefs() == null) {
+                card.setSecretRefs(new LinkedHashMap<>());
+            } else {
+                Map<String, String> normalizedRefs = new LinkedHashMap<>();
+                for (Map.Entry<String, String> entry : card.getSecretRefs().entrySet()) {
+                    if (!StringUtils.hasText(entry.getKey())) {
+                        continue;
+                    }
+                    String ref = entry.getValue();
+                    normalizedRefs.put(entry.getKey().trim(), StringUtils.hasText(ref) ? ref.trim() : null);
+                }
+                card.setSecretRefs(normalizedRefs);
+            }
         }
     }
 
@@ -417,12 +332,12 @@ public class ConfigImportService {
         if (!StringUtils.hasText(model.getNetworkModePreference())) {
             model.setNetworkModePreference(ConfigModel.NETWORK_MODE_AUTO);
         } else {
-            model.setNetworkModePreference(model.getNetworkModePreference().toLowerCase());
+            model.setNetworkModePreference(model.getNetworkModePreference().toLowerCase(Locale.ROOT));
         }
         if (!StringUtils.hasText(model.getBackgroundType())) {
             model.setBackgroundType("gradient");
         } else {
-            model.setBackgroundType(model.getBackgroundType().trim().toLowerCase());
+            model.setBackgroundType(model.getBackgroundType().trim().toLowerCase(Locale.ROOT));
         }
         if (!StringUtils.hasText(model.getBackgroundImageDataUrl())) {
             model.setBackgroundImageDataUrl(null);
@@ -437,8 +352,8 @@ public class ConfigImportService {
                 engine.setSearchUrlTemplate(firstNonBlank(engine.getLanUrl(), engine.getWanUrl()));
             }
             if (StringUtils.hasText(engine.getSearchUrlTemplate())) {
-                engine.setLanUrl(engine.getSearchUrlTemplate());
-                engine.setWanUrl(engine.getSearchUrlTemplate());
+                engine.setLanUrl(engine.getSearchUrlTemplate().trim());
+                engine.setWanUrl(engine.getSearchUrlTemplate().trim());
             }
             if (!StringUtils.hasText(engine.getIcon())) {
                 engine.setIcon(null);
@@ -448,121 +363,112 @@ public class ConfigImportService {
         }
     }
 
+    private void normalizeSecretsModel(SecretConfigModel model) {
+        if (!StringUtils.hasText(model.getVersion())) {
+            model.setVersion("1.0");
+        }
+        if (model.getSecrets() == null) {
+            model.setSecrets(new LinkedHashMap<>());
+            return;
+        }
+        Map<String, SecretConfigModel.SecretItem> normalized = new LinkedHashMap<>();
+        for (Map.Entry<String, SecretConfigModel.SecretItem> entry : model.getSecrets().entrySet()) {
+            if (!StringUtils.hasText(entry.getKey()) || entry.getValue() == null) {
+                continue;
+            }
+            SecretConfigModel.SecretItem item = entry.getValue();
+            if (!StringUtils.hasText(item.getAlgorithm())) {
+                item.setAlgorithm("AES-256-GCM");
+            }
+            normalized.put(entry.getKey().trim(), item);
+        }
+        model.setSecrets(normalized);
+    }
+
     private void validateNavModel(ConfigModel.NavModel model) {
         Set<String> groupIds = new HashSet<>();
         for (ConfigModel.GroupItem group : model.getGroups()) {
             if (!StringUtils.hasText(group.getId())) {
-                throw new IllegalStateException("Group id is required");
+                throw new IllegalStateException("分组 ID 不能为空");
             }
             if (!groupIds.add(group.getId())) {
-                throw new IllegalStateException("Duplicated group id: " + group.getId());
+                throw new IllegalStateException("分组 ID 重复：" + group.getId());
             }
             if (!StringUtils.hasText(group.getName())) {
-                throw new IllegalStateException("Group name is required");
+                throw new IllegalStateException("分组名称不能为空：" + group.getId());
             }
         }
 
         Set<String> cardIds = new HashSet<>();
         for (ConfigModel.CardItem card : model.getCards()) {
             if (!StringUtils.hasText(card.getId())) {
-                throw new IllegalStateException("Card id is required");
+                throw new IllegalStateException("卡片 ID 不能为空");
             }
             if (!cardIds.add(card.getId())) {
-                throw new IllegalStateException("Duplicated card id: " + card.getId());
+                throw new IllegalStateException("卡片 ID 重复：" + card.getId());
             }
             if (!groupIds.contains(card.getGroupId())) {
-                throw new IllegalStateException("Card group not found: " + card.getGroupId());
+                throw new IllegalStateException("卡片分组不存在：" + card.getGroupId());
             }
             if (!StringUtils.hasText(card.getName())) {
-                throw new IllegalStateException("Card name is required");
+                throw new IllegalStateException("卡片名称不能为空：" + card.getId());
             }
-            String cardType = normalizeCardType(card.getCardType());
-            card.setCardType(cardType);
-            if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
-                if (!StringUtils.hasText(card.getSshHost())) {
-                    throw new IllegalStateException("SSH host is required: " + card.getId());
-                }
-                if (card.getSshPort() == null || card.getSshPort() <= 0 || card.getSshPort() > 65535) {
-                    throw new IllegalStateException("SSH port is invalid: " + card.getId());
-                }
-                if (!StringUtils.hasText(card.getSshUsername())) {
-                    throw new IllegalStateException("SSH username is required: " + card.getId());
-                }
-                card.setSshAuthMode(normalizeSshAuthMode(card.getSshAuthMode()));
-            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
-                if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
-                    throw new IllegalStateException("Emby url is required: " + card.getId());
-                }
-                if (!StringUtils.hasText(card.getEmbyApiKey())) {
-                    throw new IllegalStateException("Emby API key is required: " + card.getId());
-                }
-            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
-                if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
-                    throw new IllegalStateException("qBittorrent url is required: " + card.getId());
-                }
-                if (!StringUtils.hasText(card.getQbittorrentUsername())) {
-                    throw new IllegalStateException("qBittorrent username is required: " + card.getId());
-                }
-                if (!StringUtils.hasText(card.getQbittorrentPassword())) {
-                    throw new IllegalStateException("qBittorrent password is required: " + card.getId());
-                }
-            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
-                if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
-                    throw new IllegalStateException("Transmission url is required: " + card.getId());
-                }
-                if (!StringUtils.hasText(card.getTransmissionUsername())) {
-                    throw new IllegalStateException("Transmission username is required: " + card.getId());
-                }
-                if (!StringUtils.hasText(card.getTransmissionPassword())) {
-                    throw new IllegalStateException("Transmission password is required: " + card.getId());
-                }
-            } else if (!StringUtils.hasText(firstNonBlank(card.getUrl(), card.getLanUrl(), card.getWanUrl()))) {
-                throw new IllegalStateException("Card url is required: " + card.getId());
-            }
-            String normalizedMode = normalizeOpenMode(card.getOpenMode());
-            if (!normalizedMode.equals(card.getOpenMode())) {
-                card.setOpenMode(normalizedMode);
-            }
-            card.setHealthCheckEnabled(isHealthCheckSupported(cardType) && card.isHealthCheckEnabled());
+            cardTypeSchemaService.validateCard(
+                    card.getId(),
+                    card.getCardType(),
+                    card.getConfig(),
+                    card.getSecretRefs()
+            );
         }
     }
 
     private void validateSystemModel(ConfigModel.SystemModel model) {
         if (!StringUtils.hasText(model.getAdminPassword()) || !model.getAdminPassword().startsWith("$2")) {
-            throw new IllegalStateException("adminPassword must be a BCrypt hash");
-        }
-        if (!BCRYPT.upgradeEncoding(model.getAdminPassword())
-                && !model.getAdminPassword().matches("^\\$2[aby]\\$.{56}$")) {
-            throw new IllegalStateException("adminPassword must be a valid BCrypt hash");
+            throw new IllegalStateException("adminPassword 必须是 BCrypt 哈希");
         }
         if (!isValidNetworkMode(model.getNetworkModePreference())) {
-            throw new IllegalStateException("Invalid networkModePreference");
+            throw new IllegalStateException("networkModePreference 配置无效");
         }
         if (!"gradient".equals(model.getBackgroundType()) && !"image".equals(model.getBackgroundType())) {
-            throw new IllegalStateException("Invalid backgroundType");
+            throw new IllegalStateException("backgroundType 只能是 gradient 或 image");
         }
         validateBackgroundDataUrl(model.getBackgroundImageDataUrl());
 
         Set<String> engineIds = new HashSet<>();
         for (ConfigModel.SearchEngineItem engine : model.getSearchEngines()) {
             if (!StringUtils.hasText(engine.getId())) {
-                throw new IllegalStateException("Search engine id is required");
+                throw new IllegalStateException("搜索引擎 ID 不能为空");
             }
             if (!engineIds.add(engine.getId())) {
-                throw new IllegalStateException("Duplicated search engine id: " + engine.getId());
+                throw new IllegalStateException("搜索引擎 ID 重复：" + engine.getId());
             }
             if (!StringUtils.hasText(engine.getName())) {
-                throw new IllegalStateException("Search engine name is required");
+                throw new IllegalStateException("搜索引擎名称不能为空：" + engine.getId());
             }
             if (!StringUtils.hasText(engine.getSearchUrlTemplate())) {
-                throw new IllegalStateException("Search engine template is required: " + engine.getId());
+                throw new IllegalStateException("搜索引擎模板不能为空：" + engine.getId());
             }
             if (StringUtils.hasText(engine.getIcon()) && engine.getIcon().length() > MAX_SEARCH_ICON_LENGTH) {
-                throw new IllegalStateException("Search engine icon exceeds max length: " + engine.getId());
+                throw new IllegalStateException("搜索引擎图标长度超限：" + engine.getId());
             }
         }
         if (!engineIds.isEmpty() && !engineIds.contains(model.getDefaultSearchEngineId())) {
-            throw new IllegalStateException("defaultSearchEngineId not found in searchEngines");
+            throw new IllegalStateException("defaultSearchEngineId 未命中 searchEngines");
+        }
+    }
+
+    private void validateSecretsModel(SecretConfigModel model) {
+        for (Map.Entry<String, SecretConfigModel.SecretItem> entry : model.getSecrets().entrySet()) {
+            if (!StringUtils.hasText(entry.getKey())) {
+                throw new IllegalStateException("密文键名不能为空");
+            }
+            SecretConfigModel.SecretItem item = entry.getValue();
+            if (!StringUtils.hasText(item.getIv())) {
+                throw new IllegalStateException("密文缺少 iv：" + entry.getKey());
+            }
+            if (!StringUtils.hasText(item.getCipherText())) {
+                throw new IllegalStateException("密文缺少 cipherText：" + entry.getKey());
+            }
         }
     }
 
@@ -572,21 +478,21 @@ public class ConfigImportService {
         }
         String normalized = dataUrl.trim();
         if (!normalized.startsWith("data:image/") || !normalized.contains(";base64,")) {
-            throw new IllegalStateException("backgroundImageDataUrl must be data:image/*;base64");
+            throw new IllegalStateException("backgroundImageDataUrl 必须是 data:image/*;base64");
         }
         int base64Index = normalized.indexOf(";base64,");
         if (base64Index < 0) {
-            throw new IllegalStateException("backgroundImageDataUrl must be base64 encoded");
+            throw new IllegalStateException("backgroundImageDataUrl 必须是 Base64 编码");
         }
         String payload = normalized.substring(base64Index + ";base64,".length());
         byte[] decoded;
         try {
             decoded = Base64.getDecoder().decode(payload);
         } catch (IllegalArgumentException ex) {
-            throw new IllegalStateException("backgroundImageDataUrl is not valid base64");
+            throw new IllegalStateException("backgroundImageDataUrl 不是合法的 Base64");
         }
         if (decoded.length > MAX_BACKGROUND_IMAGE_BYTES) {
-            throw new IllegalStateException("backgroundImageDataUrl exceeds 512KB");
+            throw new IllegalStateException("backgroundImageDataUrl 不能超过 512KB");
         }
     }
 
@@ -594,13 +500,8 @@ public class ConfigImportService {
         try {
             return Files.readAllBytes(path);
         } catch (IOException e) {
-            throw new IllegalStateException("Cannot read " + label + ": " + path, e);
+            throw new IllegalStateException("读取" + label + "失败：" + path, e);
         }
-    }
-
-    private boolean isHashChanged(String key, String hash) {
-        Optional<AppMetaEntity> existing = appMetaRepository.findById(key);
-        return existing.isEmpty() || !existing.get().getValue().equals(hash);
     }
 
     private String computeHash(byte[] input) {
@@ -608,108 +509,8 @@ public class ConfigImportService {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return Base64.getEncoder().encodeToString(digest.digest(input));
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not supported", e);
+            throw new IllegalStateException("当前运行环境不支持 SHA-256", e);
         }
-    }
-
-    private void upsertMeta(String key, String value) {
-        AppMetaEntity entity = appMetaRepository.findById(key).orElseGet(AppMetaEntity::new);
-        entity.setKey(key);
-        entity.setValue(value);
-        appMetaRepository.save(entity);
-    }
-
-    private String stringify(Object value) {
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (IOException e) {
-            throw new IllegalStateException("Cannot stringify config", e);
-        }
-    }
-
-    private String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private String normalizeOpenMode(String openMode) {
-        if (!StringUtils.hasText(openMode)) {
-            return "iframe";
-        }
-        String normalized = openMode.toLowerCase();
-        if ("new_tab".equals(normalized)) {
-            return "newtab";
-        }
-        if (!normalized.equals("iframe") && !normalized.equals("newtab") && !normalized.equals("auto")) {
-            throw new IllegalStateException("Invalid openMode: " + openMode);
-        }
-        return normalized;
-    }
-
-    private String normalizeCardType(String cardType) {
-        if (!StringUtils.hasText(cardType)) {
-            return ConfigModel.CARD_TYPE_GENERIC;
-        }
-        String normalized = cardType.trim().toLowerCase();
-        if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized)
-                && !ConfigModel.CARD_TYPE_SSH.equals(normalized)
-                && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)
-                && !ConfigModel.CARD_TYPE_QBITTORRENT.equals(normalized)
-                && !ConfigModel.CARD_TYPE_TRANSMISSION.equals(normalized)) {
-            throw new IllegalStateException("Invalid cardType: " + cardType);
-        }
-        return normalized;
-    }
-
-    private String normalizeSshAuthMode(String sshAuthMode) {
-        if (!StringUtils.hasText(sshAuthMode)) {
-            return ConfigModel.SSH_AUTH_PASSWORD;
-        }
-        String normalized = sshAuthMode.trim().toLowerCase();
-        if ("private_key".equals(normalized)) {
-            normalized = ConfigModel.SSH_AUTH_PRIVATE_KEY;
-        }
-        if (!ConfigModel.SSH_AUTH_PASSWORD.equals(normalized) && !ConfigModel.SSH_AUTH_PRIVATE_KEY.equals(normalized)) {
-            throw new IllegalStateException("Invalid sshAuthMode: " + sshAuthMode);
-        }
-        return normalized;
-    }
-
-    private Integer normalizeSshPort(Integer sshPort) {
-        if (sshPort == null || sshPort <= 0 || sshPort > 65535) {
-            return 22;
-        }
-        return sshPort;
-    }
-
-    private String resolveCardUrl(
-            String cardType,
-            String url,
-            String lanUrl,
-            String wanUrl,
-            String sshHost,
-            Integer sshPort
-    ) {
-        if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
-            Integer port = normalizeSshPort(sshPort);
-            if (StringUtils.hasText(sshHost)) {
-                return "ssh://" + sshHost.trim() + ":" + port;
-            }
-            return StringUtils.hasText(url) ? url.trim() : null;
-        }
-        return firstNonBlank(url, lanUrl, wanUrl);
-    }
-
-    private String emptyToNull(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
-    }
-
-    private boolean isHealthCheckSupported(String cardType) {
-        return ConfigModel.CARD_TYPE_GENERIC.equals(cardType);
     }
 
     private boolean isValidNetworkMode(String mode) {
@@ -718,17 +519,27 @@ public class ConfigImportService {
                 || ConfigModel.NETWORK_MODE_WAN.equals(mode);
     }
 
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
     private Path ensureParent(Path path) {
-        Path parent = path.toAbsolutePath().normalize().getParent();
+        Path normalized = path.toAbsolutePath().normalize();
+        Path parent = normalized.getParent();
         if (parent == null) {
-            throw new IllegalStateException("Invalid config path: " + path);
+            throw new IllegalStateException("配置路径无效：" + path);
         }
         try {
             Files.createDirectories(parent);
         } catch (IOException e) {
-            throw new IllegalStateException("Cannot create config directory: " + parent, e);
+            throw new IllegalStateException("创建配置目录失败：" + parent, e);
         }
-        return path.toAbsolutePath().normalize();
+        return normalized;
     }
 
     private Path detectWorkspaceConfigPath(String fileName) {
@@ -743,6 +554,20 @@ public class ConfigImportService {
             }
         }
         return candidates.get(0);
+    }
+
+    private Path resolveReadableSecretsPath() {
+        if (StringUtils.hasText(properties.getSecretsPath())) {
+            return Path.of(properties.getSecretsPath()).toAbsolutePath().normalize();
+        }
+        if (StringUtils.hasText(properties.getConfigPath())) {
+            return Path.of(properties.getConfigPath()).toAbsolutePath().normalize().resolveSibling("secrets.json");
+        }
+        return detectWorkspaceConfigPath("secrets.json");
+    }
+
+    private ConfigModel.SystemModel cloneSystemModel(ConfigModel.SystemModel source) {
+        return parseSystem(stringifyBytes(source));
     }
 
     public record ImportResult(boolean changed, String message) {

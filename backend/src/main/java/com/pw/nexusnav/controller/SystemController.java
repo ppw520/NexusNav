@@ -10,14 +10,14 @@ import com.pw.nexusnav.service.SystemConfigService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/system")
+@RequestMapping("/api/v2/system")
 public class SystemController {
 
     private final SystemConfigService systemConfigService;
@@ -39,7 +39,7 @@ public class SystemController {
         return ApiResponse.ok(systemConfigService.getAdminConfig());
     }
 
-    @PostMapping("/admin-config")
+    @PutMapping("/admin-config")
     public ApiResponse<AdminConfigDTO> updateAdminConfig(
             @Valid @RequestBody AdminConfigUpdateRequest request,
             @RequestHeader(value = AuthService.VERIFY_TOKEN_HEADER, required = false) String verifyToken

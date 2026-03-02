@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,15 +25,21 @@ public class CardService {
     private final CardRepository cardRepository;
     private final ConfigMutationService configMutationService;
     private final ConfigImportService configImportService;
+    private final CardTypeSchemaService cardTypeSchemaService;
+    private final SecretStoreService secretStoreService;
 
     public CardService(
             CardRepository cardRepository,
             ConfigMutationService configMutationService,
-            ConfigImportService configImportService
+            ConfigImportService configImportService,
+            CardTypeSchemaService cardTypeSchemaService,
+            SecretStoreService secretStoreService
     ) {
         this.cardRepository = cardRepository;
         this.configMutationService = configMutationService;
         this.configImportService = configImportService;
+        this.cardTypeSchemaService = cardTypeSchemaService;
+        this.secretStoreService = secretStoreService;
     }
 
     public List<CardDTO> listCards(String groupId, String q, Boolean enabled, String clientIp) {
@@ -45,9 +52,10 @@ public class CardService {
                         return true;
                     }
                     String keyword = q.toLowerCase(Locale.ROOT);
+                    String url = resolveUrl(card, clientIp);
                     return card.getName().toLowerCase(Locale.ROOT).contains(keyword)
                             || (card.getDescription() != null && card.getDescription().toLowerCase(Locale.ROOT).contains(keyword))
-                            || resolveUrl(card, clientIp).toLowerCase(Locale.ROOT).contains(keyword);
+                            || (url != null && url.toLowerCase(Locale.ROOT).contains(keyword));
                 })
                 .map(card -> toDto(card, clientIp))
                 .toList();
@@ -55,208 +63,120 @@ public class CardService {
 
     public CardDTO getCard(String cardId, String clientIp) {
         CardEntity card = cardRepository.findById(cardId)
-                .orElseThrow(() -> new IllegalArgumentException("Card not found: " + cardId));
+                .orElseThrow(() -> new IllegalArgumentException("卡片不存在：" + cardId));
         return toDto(card, clientIp);
     }
 
     public CardDTO create(CreateCardRequest request, String clientIp) {
         final String[] createdId = new String[1];
-        configMutationService.mutateNav(nav -> {
+        configMutationService.mutateNavAndSecrets((nav, secretModel) -> {
             List<ConfigModel.GroupItem> groups = new ArrayList<>(nav.getGroups());
             List<ConfigModel.CardItem> cards = new ArrayList<>(nav.getCards());
             nav.setGroups(groups);
             nav.setCards(cards);
 
-            if (groups.stream().noneMatch(group -> group.getId().equals(request.getGroupId()))) {
-                throw new IllegalArgumentException("Group not found: " + request.getGroupId());
+            if (groups.stream().noneMatch(group -> group.getId().equals(request.getGroupId().trim()))) {
+                throw new IllegalArgumentException("分组不存在：" + request.getGroupId());
             }
-            String cardId = StringUtils.hasText(request.getId()) ? request.getId().trim() : generateCardId(request.getName(), cards);
+
+            String cardId = StringUtils.hasText(request.getId())
+                    ? request.getId().trim()
+                    : generateCardId(request.getName(), cards);
             if (cards.stream().anyMatch(card -> card.getId().equals(cardId))) {
-                throw new IllegalArgumentException("Card already exists: " + cardId);
+                throw new IllegalArgumentException("卡片 ID 已存在：" + cardId);
             }
+
+            String cardType = cardTypeSchemaService.normalizeCardType(request.getCardType());
+            Map<String, Object> normalizedConfig = cardTypeSchemaService.normalizeConfig(cardType, request.getConfig());
+            Map<String, String> mergedSecretRefs = secretStoreService.mergeSecrets(
+                    cardId,
+                    Map.of(),
+                    request.getSecrets(),
+                    secretModel
+            );
+            cardTypeSchemaService.validateCard(cardId, cardType, normalizedConfig, mergedSecretRefs);
+
             ConfigModel.CardItem item = new ConfigModel.CardItem();
             item.setId(cardId);
             item.setGroupId(request.getGroupId().trim());
             item.setName(request.getName().trim());
-            String cardType = normalizeCardType(request.getCardType());
             item.setCardType(cardType);
-            item.setLanUrl(emptyToNull(request.getLanUrl()));
-            item.setWanUrl(emptyToNull(request.getWanUrl()));
-            if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
-                item.setSshHost(emptyToNull(request.getSshHost()));
-                item.setSshPort(normalizeSshPort(request.getSshPort()));
-                item.setSshUsername(emptyToNull(request.getSshUsername()));
-                item.setSshAuthMode(normalizeSshAuthMode(request.getSshAuthMode()));
-                item.setEmbyApiKey(null);
-                item.setQbittorrentUsername(null);
-                item.setQbittorrentPassword(null);
-                item.setTransmissionUsername(null);
-                item.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
-                item.setSshHost(null);
-                item.setSshPort(null);
-                item.setSshUsername(null);
-                item.setSshAuthMode(null);
-                item.setEmbyApiKey(emptyToNull(request.getEmbyApiKey()));
-                item.setQbittorrentUsername(null);
-                item.setQbittorrentPassword(null);
-                item.setTransmissionUsername(null);
-                item.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
-                item.setSshHost(null);
-                item.setSshPort(null);
-                item.setSshUsername(null);
-                item.setSshAuthMode(null);
-                item.setEmbyApiKey(null);
-                item.setQbittorrentUsername(emptyToNull(request.getQbittorrentUsername()));
-                item.setQbittorrentPassword(emptyToNull(request.getQbittorrentPassword()));
-                item.setTransmissionUsername(null);
-                item.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
-                item.setSshHost(null);
-                item.setSshPort(null);
-                item.setSshUsername(null);
-                item.setSshAuthMode(null);
-                item.setEmbyApiKey(null);
-                item.setQbittorrentUsername(null);
-                item.setQbittorrentPassword(null);
-                item.setTransmissionUsername(emptyToNull(request.getTransmissionUsername()));
-                item.setTransmissionPassword(emptyToNull(request.getTransmissionPassword()));
-            } else {
-                item.setSshHost(null);
-                item.setSshPort(null);
-                item.setSshUsername(null);
-                item.setSshAuthMode(null);
-                item.setEmbyApiKey(null);
-                item.setQbittorrentUsername(null);
-                item.setQbittorrentPassword(null);
-                item.setTransmissionUsername(null);
-                item.setTransmissionPassword(null);
-            }
-            item.setUrl(resolveCardUrl(
-                    cardType,
-                    request.getUrl(),
-                    item.getLanUrl(),
-                    item.getWanUrl(),
-                    item.getSshHost(),
-                    item.getSshPort()
-            ));
-            item.setOpenMode(normalizeOpenMode(request.getOpenMode()));
-            item.setIcon(emptyToNull(request.getIcon()));
-            item.setDescription(emptyToNull(request.getDescription()));
+            item.setOpenMode(cardTypeSchemaService.normalizeOpenMode(request.getOpenMode()));
+            item.setIcon(trimToNull(request.getIcon()));
+            item.setDescription(trimToNull(request.getDescription()));
             item.setOrderIndex(request.getOrderIndex());
             item.setEnabled(request.isEnabled());
-            item.setHealthCheckEnabled(isHealthCheckSupported(cardType) && request.isHealthCheckEnabled());
-            ensureCardHasAddress(item);
+            item.setHealthCheckEnabled(cardTypeSchemaService.supportsHealthCheck(cardType) && request.isHealthCheckEnabled());
+            item.setConfig(normalizedConfig);
+            item.setSecretRefs(mergedSecretRefs);
             cards.add(item);
             createdId[0] = cardId;
         });
 
         return cardRepository.findById(createdId[0])
                 .map(card -> toDto(card, clientIp))
-                .orElseThrow(() -> new IllegalStateException("Card not found after creation: " + createdId[0]));
+                .orElseThrow(() -> new IllegalStateException("卡片创建后读取失败：" + createdId[0]));
     }
 
     public CardDTO update(String cardId, UpdateCardRequest request, String clientIp) {
-        configMutationService.mutateNav(nav -> {
+        configMutationService.mutateNavAndSecrets((nav, secretModel) -> {
             List<ConfigModel.GroupItem> groups = new ArrayList<>(nav.getGroups());
             List<ConfigModel.CardItem> cards = new ArrayList<>(nav.getCards());
             nav.setGroups(groups);
             nav.setCards(cards);
 
-            if (groups.stream().noneMatch(group -> group.getId().equals(request.getGroupId()))) {
-                throw new IllegalArgumentException("Group not found: " + request.getGroupId());
+            if (groups.stream().noneMatch(group -> group.getId().equals(request.getGroupId().trim()))) {
+                throw new IllegalArgumentException("分组不存在：" + request.getGroupId());
             }
+
             ConfigModel.CardItem target = cards.stream()
                     .filter(card -> card.getId().equals(cardId))
                     .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Card not found: " + cardId));
+                    .orElseThrow(() -> new IllegalArgumentException("卡片不存在：" + cardId));
+
+            String cardType = cardTypeSchemaService.normalizeCardType(request.getCardType());
+            Map<String, Object> normalizedConfig = cardTypeSchemaService.normalizeConfig(cardType, request.getConfig());
+            Map<String, String> mergedSecretRefs = secretStoreService.mergeSecrets(
+                    cardId,
+                    target.getSecretRefs(),
+                    request.getSecrets(),
+                    secretModel
+            );
+            cardTypeSchemaService.validateCard(cardId, cardType, normalizedConfig, mergedSecretRefs);
+
             target.setGroupId(request.getGroupId().trim());
             target.setName(request.getName().trim());
-            String cardType = normalizeCardType(request.getCardType());
             target.setCardType(cardType);
-            target.setLanUrl(emptyToNull(request.getLanUrl()));
-            target.setWanUrl(emptyToNull(request.getWanUrl()));
-            if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
-                target.setSshHost(emptyToNull(request.getSshHost()));
-                target.setSshPort(normalizeSshPort(request.getSshPort()));
-                target.setSshUsername(emptyToNull(request.getSshUsername()));
-                target.setSshAuthMode(normalizeSshAuthMode(request.getSshAuthMode()));
-                target.setEmbyApiKey(null);
-                target.setQbittorrentUsername(null);
-                target.setQbittorrentPassword(null);
-                target.setTransmissionUsername(null);
-                target.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_EMBY.equals(cardType)) {
-                target.setSshHost(null);
-                target.setSshPort(null);
-                target.setSshUsername(null);
-                target.setSshAuthMode(null);
-                target.setEmbyApiKey(mergeSecretValue(request.getEmbyApiKey(), target.getEmbyApiKey()));
-                target.setQbittorrentUsername(null);
-                target.setQbittorrentPassword(null);
-                target.setTransmissionUsername(null);
-                target.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType)) {
-                target.setSshHost(null);
-                target.setSshPort(null);
-                target.setSshUsername(null);
-                target.setSshAuthMode(null);
-                target.setEmbyApiKey(null);
-                target.setQbittorrentUsername(emptyToNull(request.getQbittorrentUsername()));
-                target.setQbittorrentPassword(mergeSecretValue(request.getQbittorrentPassword(), target.getQbittorrentPassword()));
-                target.setTransmissionUsername(null);
-                target.setTransmissionPassword(null);
-            } else if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType)) {
-                target.setSshHost(null);
-                target.setSshPort(null);
-                target.setSshUsername(null);
-                target.setSshAuthMode(null);
-                target.setEmbyApiKey(null);
-                target.setQbittorrentUsername(null);
-                target.setQbittorrentPassword(null);
-                target.setTransmissionUsername(emptyToNull(request.getTransmissionUsername()));
-                target.setTransmissionPassword(mergeSecretValue(request.getTransmissionPassword(), target.getTransmissionPassword()));
-            } else {
-                target.setSshHost(null);
-                target.setSshPort(null);
-                target.setSshUsername(null);
-                target.setSshAuthMode(null);
-                target.setEmbyApiKey(null);
-                target.setQbittorrentUsername(null);
-                target.setQbittorrentPassword(null);
-                target.setTransmissionUsername(null);
-                target.setTransmissionPassword(null);
-            }
-            target.setUrl(resolveCardUrl(
-                    cardType,
-                    request.getUrl(),
-                    target.getLanUrl(),
-                    target.getWanUrl(),
-                    target.getSshHost(),
-                    target.getSshPort()
-            ));
-            target.setOpenMode(normalizeOpenMode(request.getOpenMode()));
-            target.setIcon(emptyToNull(request.getIcon()));
-            target.setDescription(emptyToNull(request.getDescription()));
+            target.setOpenMode(cardTypeSchemaService.normalizeOpenMode(request.getOpenMode()));
+            target.setIcon(trimToNull(request.getIcon()));
+            target.setDescription(trimToNull(request.getDescription()));
             target.setOrderIndex(request.getOrderIndex());
             target.setEnabled(request.isEnabled());
-            target.setHealthCheckEnabled(isHealthCheckSupported(cardType) && request.isHealthCheckEnabled());
-            ensureCardHasAddress(target);
+            target.setHealthCheckEnabled(cardTypeSchemaService.supportsHealthCheck(cardType) && request.isHealthCheckEnabled());
+            target.setConfig(normalizedConfig);
+            target.setSecretRefs(mergedSecretRefs);
         });
 
         return cardRepository.findById(cardId)
                 .map(card -> toDto(card, clientIp))
-                .orElseThrow(() -> new IllegalStateException("Card not found after update: " + cardId));
+                .orElseThrow(() -> new IllegalStateException("卡片更新后读取失败：" + cardId));
     }
 
     public void delete(String cardId) {
-        configMutationService.mutateNav(nav -> {
+        configMutationService.mutateNavAndSecrets((nav, secretModel) -> {
             List<ConfigModel.CardItem> cards = new ArrayList<>(nav.getCards());
-            boolean removed = cards.removeIf(card -> card.getId().equals(cardId));
-            if (!removed) {
-                throw new IllegalArgumentException("Card not found: " + cardId);
+            ConfigModel.CardItem target = cards.stream()
+                    .filter(card -> card.getId().equals(cardId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("卡片不存在：" + cardId));
+            if (target.getSecretRefs() != null) {
+                for (String ref : target.getSecretRefs().values()) {
+                    if (StringUtils.hasText(ref)) {
+                        secretModel.getSecrets().remove(ref);
+                    }
+                }
             }
+            cards.remove(target);
             nav.setCards(cards);
         });
     }
@@ -269,7 +189,7 @@ public class CardService {
             List<ConfigModel.CardItem> cards = new ArrayList<>(nav.getCards());
             boolean anyMissing = ids.stream().anyMatch(id -> cards.stream().noneMatch(card -> card.getId().equals(id)));
             if (anyMissing) {
-                throw new IllegalArgumentException("Some cards do not exist");
+                throw new IllegalArgumentException("存在无效卡片 ID，排序失败");
             }
             for (ConfigModel.CardItem card : cards) {
                 Integer order = orderMap.get(card.getId());
@@ -290,46 +210,32 @@ public class CardService {
     }
 
     private CardDTO toDto(CardEntity card, String clientIp) {
-        String cardType = normalizeCardType(card.getCardType());
+        Map<String, Object> config = card.getConfig() == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(card.getConfig());
+        String cardType = cardTypeSchemaService.normalizeCardType(card.getCardType());
         return new CardDTO(
                 card.getId(),
                 card.getGroup().getId(),
                 card.getName(),
-                resolveUrl(card, clientIp),
-                emptyToNull(card.getLanUrl()),
-                emptyToNull(card.getWanUrl()),
-                normalizeOpenMode(card.getOpenMode()),
                 cardType,
-                ConfigModel.CARD_TYPE_SSH.equals(cardType) ? emptyToNull(card.getSshHost()) : null,
-                ConfigModel.CARD_TYPE_SSH.equals(cardType) ? normalizeSshPort(card.getSshPort()) : null,
-                ConfigModel.CARD_TYPE_SSH.equals(cardType) ? emptyToNull(card.getSshUsername()) : null,
-                ConfigModel.CARD_TYPE_SSH.equals(cardType) ? normalizeSshAuthMode(card.getSshAuthMode()) : null,
-                ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType) ? emptyToNull(card.getQbittorrentUsername()) : null,
-                ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType) ? emptyToNull(card.getTransmissionUsername()) : null,
-                ConfigModel.CARD_TYPE_EMBY.equals(cardType) && StringUtils.hasText(card.getEmbyApiKey()),
-                ConfigModel.CARD_TYPE_QBITTORRENT.equals(cardType) && StringUtils.hasText(card.getQbittorrentPassword()),
-                ConfigModel.CARD_TYPE_TRANSMISSION.equals(cardType) && StringUtils.hasText(card.getTransmissionPassword()),
+                cardTypeSchemaService.normalizeOpenMode(card.getOpenMode()),
                 card.getIcon(),
                 card.getDescription(),
                 card.getOrderIndex(),
                 card.isEnabled(),
-                isHealthCheckSupported(cardType) && card.isHealthCheckEnabled()
+                cardTypeSchemaService.supportsHealthCheck(cardType) && card.isHealthCheckEnabled(),
+                resolveUrl(card, clientIp),
+                cardTypeSchemaService.getTextConfig(config, "lanUrl"),
+                cardTypeSchemaService.getTextConfig(config, "wanUrl"),
+                config,
+                secretStoreService.toSecretState(card.getSecretRefs())
         );
     }
 
     private String resolveUrl(CardEntity card, String clientIp) {
         String mode = resolveEffectiveNetworkMode(clientIp);
-        String preferred = ConfigModel.NETWORK_MODE_LAN.equals(mode) ? card.getLanUrl() : card.getWanUrl();
-        if (StringUtils.hasText(preferred)) {
-            return preferred;
-        }
-
-        String fallback = ConfigModel.NETWORK_MODE_LAN.equals(mode) ? card.getWanUrl() : card.getLanUrl();
-        if (StringUtils.hasText(fallback)) {
-            return fallback;
-        }
-
-        return card.getUrl();
+        return cardTypeSchemaService.resolveUrl(card.getConfig(), mode);
     }
 
     private String resolveEffectiveNetworkMode(String clientIp) {
@@ -338,54 +244,6 @@ public class CardService {
             return preference;
         }
         return IpUtils.isLanIp(clientIp) ? ConfigModel.NETWORK_MODE_LAN : ConfigModel.NETWORK_MODE_WAN;
-    }
-
-    private void ensureCardHasAddress(ConfigModel.CardItem item) {
-        if (ConfigModel.CARD_TYPE_SSH.equals(item.getCardType())) {
-            if (!StringUtils.hasText(item.getSshHost())) {
-                throw new IllegalArgumentException("SSH host is required");
-            }
-            if (!StringUtils.hasText(item.getSshUsername())) {
-                throw new IllegalArgumentException("SSH username is required");
-            }
-            return;
-        }
-        if (ConfigModel.CARD_TYPE_EMBY.equals(item.getCardType())) {
-            if (!StringUtils.hasText(firstNonBlank(item.getUrl(), item.getLanUrl(), item.getWanUrl()))) {
-                throw new IllegalArgumentException("Emby url is required");
-            }
-            if (!StringUtils.hasText(item.getEmbyApiKey())) {
-                throw new IllegalArgumentException("Emby API key is required");
-            }
-            return;
-        }
-        if (ConfigModel.CARD_TYPE_QBITTORRENT.equals(item.getCardType())) {
-            if (!StringUtils.hasText(firstNonBlank(item.getUrl(), item.getLanUrl(), item.getWanUrl()))) {
-                throw new IllegalArgumentException("qBittorrent url is required");
-            }
-            if (!StringUtils.hasText(item.getQbittorrentUsername())) {
-                throw new IllegalArgumentException("qBittorrent username is required");
-            }
-            if (!StringUtils.hasText(item.getQbittorrentPassword())) {
-                throw new IllegalArgumentException("qBittorrent password is required");
-            }
-            return;
-        }
-        if (ConfigModel.CARD_TYPE_TRANSMISSION.equals(item.getCardType())) {
-            if (!StringUtils.hasText(firstNonBlank(item.getUrl(), item.getLanUrl(), item.getWanUrl()))) {
-                throw new IllegalArgumentException("Transmission url is required");
-            }
-            if (!StringUtils.hasText(item.getTransmissionUsername())) {
-                throw new IllegalArgumentException("Transmission username is required");
-            }
-            if (!StringUtils.hasText(item.getTransmissionPassword())) {
-                throw new IllegalArgumentException("Transmission password is required");
-            }
-            return;
-        }
-        if (!StringUtils.hasText(firstNonBlank(item.getUrl(), item.getLanUrl(), item.getWanUrl()))) {
-            throw new IllegalArgumentException("Card url is required");
-        }
     }
 
     private String generateCardId(String name, List<ConfigModel.CardItem> cards) {
@@ -410,98 +268,7 @@ public class CardService {
         return false;
     }
 
-    private String normalizeOpenMode(String openMode) {
-        if (!StringUtils.hasText(openMode)) {
-            return "iframe";
-        }
-        String normalized = openMode.toLowerCase(Locale.ROOT);
-        if ("new_tab".equals(normalized)) {
-            return "newtab";
-        }
-        if (!normalized.equals("iframe") && !normalized.equals("newtab") && !normalized.equals("auto")) {
-            throw new IllegalArgumentException("Invalid openMode: " + openMode);
-        }
-        return normalized;
-    }
-
-    private String normalizeCardType(String cardType) {
-        if (!StringUtils.hasText(cardType)) {
-            return ConfigModel.CARD_TYPE_GENERIC;
-        }
-        String normalized = cardType.trim().toLowerCase(Locale.ROOT);
-        if (!ConfigModel.CARD_TYPE_GENERIC.equals(normalized)
-                && !ConfigModel.CARD_TYPE_SSH.equals(normalized)
-                && !ConfigModel.CARD_TYPE_EMBY.equals(normalized)
-                && !ConfigModel.CARD_TYPE_QBITTORRENT.equals(normalized)
-                && !ConfigModel.CARD_TYPE_TRANSMISSION.equals(normalized)) {
-            throw new IllegalArgumentException("Invalid cardType: " + cardType);
-        }
-        return normalized;
-    }
-
-    private String normalizeSshAuthMode(String sshAuthMode) {
-        if (!StringUtils.hasText(sshAuthMode)) {
-            return ConfigModel.SSH_AUTH_PASSWORD;
-        }
-        String normalized = sshAuthMode.trim().toLowerCase(Locale.ROOT);
-        if ("private_key".equals(normalized)) {
-            return ConfigModel.SSH_AUTH_PRIVATE_KEY;
-        }
-        if (!ConfigModel.SSH_AUTH_PASSWORD.equals(normalized) && !ConfigModel.SSH_AUTH_PRIVATE_KEY.equals(normalized)) {
-            throw new IllegalArgumentException("Invalid sshAuthMode: " + sshAuthMode);
-        }
-        return normalized;
-    }
-
-    private Integer normalizeSshPort(Integer sshPort) {
-        if (sshPort == null || sshPort <= 0 || sshPort > 65535) {
-            return 22;
-        }
-        return sshPort;
-    }
-
-    private String resolveCardUrl(
-            String cardType,
-            String url,
-            String lanUrl,
-            String wanUrl,
-            String sshHost,
-            Integer sshPort
-    ) {
-        if (ConfigModel.CARD_TYPE_SSH.equals(cardType)) {
-            Integer port = normalizeSshPort(sshPort);
-            if (StringUtils.hasText(sshHost)) {
-                return "ssh://" + sshHost.trim() + ":" + port;
-            }
-            return null;
-        }
-        return firstNonBlank(url, lanUrl, wanUrl);
-    }
-
-    private boolean isHealthCheckSupported(String cardType) {
-        return ConfigModel.CARD_TYPE_GENERIC.equals(cardType);
-    }
-
-    private String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (StringUtils.hasText(value)) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private String emptyToNull(String value) {
+    private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
-    }
-
-    private String mergeSecretValue(String incoming, String existing) {
-        if (incoming == null) {
-            return emptyToNull(existing);
-        }
-        if (incoming.isBlank()) {
-            return null;
-        }
-        return incoming.trim();
     }
 }

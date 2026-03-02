@@ -35,18 +35,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Object>> handleValidation(MethodArgumentNotValidException ex) {
-        return ResponseEntity.badRequest().body(ApiResponse.error("Invalid request body"));
+        return ResponseEntity.badRequest().body(ApiResponse.error("请求参数校验失败"));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Object>> handleNoResourceFound(NoResourceFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("Not Found"));
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("请求资源不存在"));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleException(Exception ex) {
         String traceId = UUID.randomUUID().toString();
         log.error("Unhandled exception traceId={}", traceId, ex);
-        return ResponseEntity.internalServerError().body(ApiResponse.error("Internal server error, traceId=" + traceId));
+        return ResponseEntity.internalServerError().body(ApiResponse.error("服务器内部错误，traceId=" + traceId));
     }
 }

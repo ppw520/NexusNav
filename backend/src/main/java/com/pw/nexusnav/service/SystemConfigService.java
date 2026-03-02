@@ -152,32 +152,32 @@ public class SystemConfigService {
 
     private void validateAdminConfigRequest(AdminConfigUpdateRequest request) {
         if (request.getSecurity() == null) {
-            throw new IllegalArgumentException("security is required");
+            throw new IllegalArgumentException("security 不能为空");
         }
         if (request.getSecurity().getSessionTimeoutMinutes() <= 0) {
-            throw new IllegalArgumentException("sessionTimeoutMinutes must be greater than 0");
+            throw new IllegalArgumentException("sessionTimeoutMinutes 必须大于 0");
         }
         if (request.getSearchEngines() == null || request.getSearchEngines().isEmpty()) {
-            throw new IllegalArgumentException("searchEngines cannot be empty");
+            throw new IllegalArgumentException("searchEngines 不能为空");
         }
         if (!StringUtils.hasText(request.getBackgroundType())) {
-            throw new IllegalArgumentException("backgroundType is required");
+            throw new IllegalArgumentException("backgroundType 不能为空");
         }
         String normalizedBackgroundType = request.getBackgroundType().trim().toLowerCase(Locale.ROOT);
         if (!"gradient".equals(normalizedBackgroundType) && !"image".equals(normalizedBackgroundType)) {
-            throw new IllegalArgumentException("backgroundType must be gradient or image");
+            throw new IllegalArgumentException("backgroundType 只能是 gradient 或 image");
         }
         validateBackgroundDataUrl(request.getBackgroundImageDataUrl());
         for (AdminConfigUpdateRequest.SearchEngineItemRequest item : request.getSearchEngines()) {
             String icon = normalizeSearchIcon(item.getIcon());
             if (icon != null && icon.length() > MAX_SEARCH_ICON_LENGTH) {
-                throw new IllegalArgumentException("searchEngine icon exceeds max length");
+                throw new IllegalArgumentException("搜索引擎图标长度超限");
             }
         }
         boolean defaultExists = request.getSearchEngines().stream()
                 .anyMatch(item -> item.getId().equals(request.getDefaultSearchEngineId()));
         if (!defaultExists) {
-            throw new IllegalArgumentException("defaultSearchEngineId not found in searchEngines");
+            throw new IllegalArgumentException("defaultSearchEngineId 未命中 searchEngines");
         }
     }
 
@@ -187,7 +187,7 @@ public class SystemConfigService {
         }
         String value = icon.trim();
         if (value.length() > MAX_SEARCH_ICON_LENGTH) {
-            throw new IllegalArgumentException("searchEngine icon exceeds max length");
+            throw new IllegalArgumentException("搜索引擎图标长度超限");
         }
         return value;
     }
@@ -205,21 +205,21 @@ public class SystemConfigService {
         }
         String normalized = dataUrl.trim();
         if (!normalized.startsWith("data:image/") || !normalized.contains(";base64,")) {
-            throw new IllegalArgumentException("backgroundImageDataUrl must be data:image/*;base64");
+            throw new IllegalArgumentException("backgroundImageDataUrl 必须是 data:image/*;base64");
         }
         int base64Index = normalized.indexOf(";base64,");
         if (base64Index < 0) {
-            throw new IllegalArgumentException("backgroundImageDataUrl must be base64 encoded");
+            throw new IllegalArgumentException("backgroundImageDataUrl 必须是 Base64 编码");
         }
         String payload = normalized.substring(base64Index + ";base64,".length());
         byte[] decoded;
         try {
             decoded = Base64.getDecoder().decode(payload);
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("backgroundImageDataUrl is not valid base64");
+            throw new IllegalArgumentException("backgroundImageDataUrl 不是合法的 Base64");
         }
         if (decoded.length > MAX_BACKGROUND_IMAGE_BYTES) {
-            throw new IllegalArgumentException("backgroundImageDataUrl exceeds 512KB");
+            throw new IllegalArgumentException("backgroundImageDataUrl 不能超过 512KB");
         }
     }
 

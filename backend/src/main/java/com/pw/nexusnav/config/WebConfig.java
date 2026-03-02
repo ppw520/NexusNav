@@ -28,7 +28,7 @@ public class WebConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
                 .allowedOriginPatterns(resolveAllowedOrigins(properties.getSecurity().getAllowedOrigins()))
-                .allowedMethods("GET", "POST", "OPTIONS")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
     }
@@ -36,11 +36,11 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new AuthInterceptor(authService))
-                .addPathPatterns("/api/v1/**")
+                .addPathPatterns("/api/v2/**")
                 .excludePathPatterns(
-                        "/api/v1/auth/login",
-                        "/api/v1/auth/session",
-                        "/api/v1/auth/logout"
+                        "/api/v2/auth/login",
+                        "/api/v2/auth/session",
+                        "/api/v2/auth/logout"
                 );
     }
 
@@ -68,7 +68,7 @@ public class WebConfig implements WebMvcConfigurer {
 
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.getWriter().write("{\"code\":401,\"message\":\"Unauthorized\",\"data\":null}");
+            response.getWriter().write("{\"code\":401,\"message\":\"未登录或会话已过期\",\"data\":null}");
             return false;
         }
     }
